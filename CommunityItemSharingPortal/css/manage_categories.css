@@ -1,0 +1,169 @@
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Arial, Helvetica, sans-serif;
+}
+
+body{
+    display:flex;
+    background:#f4f6f9;
+}
+
+.sidebar{
+    width:250px;
+    height:100vh;
+    background:#2563eb;
+    color:#fff;
+    position:fixed;
+}
+
+.sidebar h2{
+    text-align:center;
+    padding:25px;
+}
+
+.sidebar ul{
+    list-style:none;
+}
+
+.sidebar ul li a{
+    display:block;
+    color:#fff;
+    text-decoration:none;
+    padding:15px 20px;
+}
+
+.sidebar ul li.active a,
+.sidebar ul li a:hover{
+    background:#1d4ed8;
+}
+
+.main{
+    margin-left:250px;
+    width:calc(100% - 250px);
+    padding:30px;
+}
+
+header{
+    margin-bottom:20px;
+}
+
+.add-box{
+    background:#fff;
+    padding:20px;
+    border-radius:8px;
+    margin-bottom:20px;
+    box-shadow:0 2px 8px rgba(0,0,0,.1);
+}
+
+.add-box input{
+    width:70%;
+    padding:12px;
+    border:1px solid #ccc;
+    border-radius:5px;
+}
+
+.add-box button{
+    padding:12px 20px;
+    border:none;
+    background:#2563eb;
+    color:#fff;
+    border-radius:5px;
+    cursor:pointer;
+}
+
+.add-box button:hover{
+    background:#1d4ed8;
+}
+
+table{
+    width:100%;
+    border-collapse:collapse;
+    background:#fff;
+    box-shadow:0 4px 10px rgba(0,0,0,.1);
+}
+
+table th{
+    background:#2563eb;
+    color:#fff;
+    padding:15px;
+}
+
+table td{
+    padding:15px;
+    text-align:center;
+    border-bottom:1px solid #ddd;
+}
+
+.edit-btn,
+.delete-btn{
+    color:#fff;
+    text-decoration:none;
+    padding:8px 15px;
+    border-radius:5px;
+    margin:2px;
+}
+
+.edit-btn{
+    background:#198754;
+}
+
+.edit-btn:hover{
+    background:#157347;
+}
+
+.delete-btn{
+    background:#dc3545;
+}
+
+.delete-btn:hover{
+    background:#bb2d3b;
+}
+
+@media(max-width:768px){
+
+.sidebar{
+    width:220px;
+}
+
+.main{
+    margin-left:220px;
+    width:calc(100% - 220px);
+}
+
+table{
+    font-size:14px;
+}
+
+}
+
+@media(max-width:600px){
+
+body{
+    display:block;
+}
+
+.sidebar{
+    position:relative;
+    width:100%;
+    height:auto;
+}
+
+.main{
+    margin-left:0;
+    width:100%;
+}
+
+table{
+    display:block;
+    overflow-x:auto;
+    white-space:nowrap;
+}
+
+.add-box input{
+    width:100%;
+    margin-bottom:10px;
+}
+
+}

@@ -1,0 +1,190 @@
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Poppins',sans-serif;
+}
+
+body{
+    display:flex;
+    background:#f4f6f9;
+}
+
+/* Sidebar */
+
+.sidebar{
+    width:250px;
+    height:100vh;
+    background:#2563eb;
+    position:fixed;
+    left:0;
+    top:0;
+    color:#fff;
+}
+
+.logo{
+    text-align:center;
+    padding:20px;
+}
+
+.logo img{
+    width:70px;
+}
+
+.logo h2{
+    margin-top:10px;
+}
+
+.sidebar ul{
+    list-style:none;
+    margin-top:20px;
+}
+
+.sidebar ul li a{
+    display:block;
+    padding:15px 25px;
+    color:#fff;
+    text-decoration:none;
+    transition:.3s;
+}
+
+.sidebar ul li a:hover,
+.sidebar ul li.active a{
+    background:#1d4ed8;
+}
+
+/* Main */
+
+.main{
+    margin-left:250px;
+    width:calc(100% - 250px);
+    padding:30px;
+}
+
+header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:30px;
+}
+
+.profile{
+    display:flex;
+    align-items:center;
+    gap:10px;
+}
+
+.profile img{
+    width:50px;
+    height:50px;
+    border-radius:50%;
+}
+
+.items-container{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(330px,1fr));
+    gap:25px;
+}
+
+.item-card{
+    background:#fff;
+    border-radius:15px;
+    overflow:hidden;
+    box-shadow:0 5px 15px rgba(0,0,0,.1);
+    transition:.3s;
+}
+
+.item-card:hover{
+    transform:translateY(-6px);
+}
+
+.item-image img{
+    width:100%;
+    height:220px;
+    object-fit:cover;
+}
+
+.item-details{
+    padding:20px;
+}
+
+.item-details h2{
+    color:#1e293b;
+    margin-bottom:15px;
+}
+
+.item-details p{
+    margin-bottom:10px;
+    color:#555;
+}
+
+.status{
+    color:#16a34a;
+    font-weight:bold;
+}
+
+/* Buttons */
+
+.buttons{
+    display:flex;
+    gap:10px;
+    margin-top:20px;
+}
+
+.borrow-btn,
+.view-btn{
+    flex:1;
+    text-align:center;
+    text-decoration:none;
+    color:#fff;
+    padding:12px;
+    border-radius:8px;
+    transition:.3s;
+}
+
+.borrow-btn{
+    background:#2563eb;
+}
+
+.borrow-btn:hover{
+    background:#1d4ed8;
+}
+
+.view-btn{
+    background:#16a34a;
+}
+
+.view-btn:hover{
+    background:#15803d;
+}
+
+.no-items{
+    background:#fff;
+    padding:50px;
+    border-radius:15px;
+    text-align:center;
+}
+
+@media(max-width:768px){
+
+.sidebar{
+    position:relative;
+    width:100%;
+    height:auto;
+}
+
+.main{
+    margin-left:0;
+    width:100%;
+}
+
+body{
+    flex-direction:column;
+}
+
+header{
+    flex-direction:column;
+    gap:20px;
+}
+
+}

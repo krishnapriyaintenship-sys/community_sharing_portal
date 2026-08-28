@@ -1,0 +1,636 @@
+/*=========================================
+    CampusShare Add Item CSS
+=========================================*/
+
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:'Poppins',sans-serif;
+}
+
+body{
+    background:#f4f7fc;
+    display:flex;
+    min-height:100vh;
+}
+
+/*=========================
+    SIDEBAR
+=========================*/
+
+.sidebar{
+
+    width:260px;
+    height:100vh;
+
+    position:fixed;
+    left:0;
+    top:0;
+
+    background:linear-gradient(180deg,#1e3a8a,#2563eb);
+
+    color:#fff;
+
+    overflow-y:auto;
+
+    box-shadow:5px 0 20px rgba(0,0,0,.15);
+
+}
+
+.logo{
+
+    text-align:center;
+
+    padding:25px;
+
+    border-bottom:1px solid rgba(255,255,255,.15);
+
+}
+
+.logo img{
+
+    width:80px;
+    height:80px;
+
+    background:white;
+
+    padding:8px;
+
+    border-radius:50%;
+
+    margin-bottom:10px;
+
+}
+
+.logo h2{
+
+    color:white;
+
+    font-size:24px;
+
+    font-weight:700;
+
+}
+
+.sidebar ul{
+
+    list-style:none;
+
+    margin-top:25px;
+
+}
+
+.sidebar ul li{
+
+    margin:8px 15px;
+
+}
+
+.sidebar ul li a{
+
+    display:flex;
+
+    align-items:center;
+
+    gap:12px;
+
+    padding:14px 18px;
+
+    border-radius:12px;
+
+    text-decoration:none;
+
+    color:white;
+
+    transition:.3s;
+
+}
+
+.sidebar ul li a i{
+
+    width:22px;
+
+    text-align:center;
+
+}
+
+.sidebar ul li a:hover{
+
+    background:white;
+
+    color:#2563eb;
+
+    transform:translateX(8px);
+
+}
+
+.sidebar ul li.active a{
+
+    background:white;
+
+    color:#2563eb;
+
+    font-weight:600;
+
+}
+
+.sidebar ul li:last-child{
+
+    margin-top:40px;
+
+}
+
+.sidebar ul li:last-child a{
+
+    background:#dc2626;
+
+}
+
+.sidebar ul li:last-child a:hover{
+
+    background:#b91c1c;
+
+    color:white;
+
+    transform:none;
+
+}
+
+/*=========================
+    MAIN CONTENT
+=========================*/
+
+.main{
+
+    margin-left:260px;
+
+    width:calc(100% - 260px);
+
+    padding:35px;
+
+}
+/*=========================================
+    HEADER
+=========================================*/
+
+header{
+
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+
+    margin-bottom:35px;
+
+}
+
+header h1{
+
+    font-size:32px;
+    color:#1e293b;
+    font-weight:700;
+
+}
+
+/*=========================
+    PROFILE
+=========================*/
+
+.profile{
+
+    display:flex;
+    align-items:center;
+    gap:15px;
+
+    background:white;
+
+    padding:10px 18px;
+
+    border-radius:12px;
+
+    box-shadow:0 5px 15px rgba(0,0,0,.08);
+
+}
+
+.profile img{
+
+    width:55px;
+    height:55px;
+
+    border-radius:50%;
+
+    object-fit:cover;
+
+    border:3px solid #2563eb;
+
+}
+
+.profile span{
+
+    font-size:16px;
+
+    font-weight:600;
+
+    color:#1e293b;
+
+}
+
+.profile img:hover{
+
+    transform:scale(1.08);
+
+    transition:.3s;
+
+}
+
+/*=========================
+    FORM CONTAINER
+=========================*/
+
+.form-container{
+
+    background:white;
+
+    border-radius:20px;
+
+    padding:35px;
+
+    box-shadow:0 10px 30px rgba(0,0,0,.08);
+
+    animation:fadeIn .6s ease;
+
+}
+
+/* Form Rows */
+
+.row{
+
+    display:grid;
+
+    grid-template-columns:1fr 1fr;
+
+    gap:20px;
+
+    margin-bottom:20px;
+
+}
+
+/* Fade Animation */
+
+@keyframes fadeIn{
+
+    from{
+
+        opacity:0;
+        transform:translateY(20px);
+
+    }
+
+    to{
+
+        opacity:1;
+        transform:translateY(0);
+
+    }
+
+}
+/*=========================================
+      FORM INPUTS
+=========================================*/
+
+.input-box{
+
+    display:flex;
+    flex-direction:column;
+    margin-bottom:20px;
+
+}
+
+.input-box label{
+
+    font-size:16px;
+    font-weight:600;
+    color:#1e293b;
+    margin-bottom:8px;
+
+}
+
+/* Text Input */
+
+.input-box input[type="text"],
+.input-box input[type="date"],
+.input-box select,
+.input-box textarea{
+
+    width:100%;
+
+    padding:14px 16px;
+
+    border:2px solid #d1d5db;
+
+    border-radius:12px;
+
+    font-size:15px;
+
+    outline:none;
+
+    transition:.3s;
+
+    background:#ffffff;
+
+}
+
+/* Textarea */
+
+.input-box textarea{
+
+    resize:vertical;
+    min-height:130px;
+
+}
+
+/* Focus Effect */
+
+.input-box input:focus,
+.input-box select:focus,
+.input-box textarea:focus{
+
+    border-color:#2563eb;
+
+    box-shadow:0 0 10px rgba(37,99,235,.25);
+
+}
+
+/* Placeholder */
+
+.input-box input::placeholder,
+.input-box textarea::placeholder{
+
+    color:#9ca3af;
+
+}
+
+/* Dropdown */
+
+.input-box select{
+
+    cursor:pointer;
+
+}
+
+/* File Upload */
+
+.input-box input[type="file"]{
+
+    padding:12px;
+
+    border:2px dashed #2563eb;
+
+    border-radius:12px;
+
+    background:#eff6ff;
+
+    cursor:pointer;
+
+    transition:.3s;
+
+}
+
+.input-box input[type="file"]:hover{
+
+    background:#dbeafe;
+
+    border-color:#1d4ed8;
+
+}
+/*=========================================
+      SUBMIT BUTTON
+=========================================*/
+
+button{
+
+    width:100%;
+
+    padding:16px;
+
+    background:linear-gradient(135deg,#2563eb,#7c3aed);
+
+    color:white;
+
+    border:none;
+
+    border-radius:12px;
+
+    font-size:17px;
+
+    font-weight:600;
+
+    cursor:pointer;
+
+    transition:.3s;
+
+}
+
+button i{
+
+    margin-right:8px;
+
+}
+
+button:hover{
+
+    transform:translateY(-4px);
+
+    box-shadow:0 12px 25px rgba(37,99,235,.30);
+
+}
+
+/*=========================================
+      IMAGE PREVIEW
+=========================================*/
+
+.preview-container{
+
+    margin-top:15px;
+
+    display:flex;
+
+    justify-content:center;
+
+}
+
+.preview-container img{
+
+    width:220px;
+
+    height:220px;
+
+    object-fit:cover;
+
+    border-radius:15px;
+
+    border:3px solid #2563eb;
+
+    display:none;
+
+    box-shadow:0 10px 25px rgba(0,0,0,.15);
+
+}
+
+/*=========================================
+      SUCCESS MESSAGE
+=========================================*/
+
+.success{
+
+    background:#dcfce7;
+
+    color:#15803d;
+
+    padding:15px;
+
+    border-radius:10px;
+
+    margin-bottom:20px;
+
+    font-weight:600;
+
+}
+
+.error{
+
+    background:#fee2e2;
+
+    color:#dc2626;
+
+    padding:15px;
+
+    border-radius:10px;
+
+    margin-bottom:20px;
+
+    font-weight:600;
+
+}
+
+/*=========================================
+      SCROLLBAR
+=========================================*/
+
+::-webkit-scrollbar{
+
+    width:8px;
+
+}
+
+::-webkit-scrollbar-thumb{
+
+    background:#2563eb;
+
+    border-radius:20px;
+
+}
+
+::-webkit-scrollbar-track{
+
+    background:#e5e7eb;
+
+}
+
+/*=========================================
+      RESPONSIVE
+=========================================*/
+
+@media(max-width:900px){
+
+.sidebar{
+
+    position:relative;
+
+    width:100%;
+
+    height:auto;
+
+}
+
+.main{
+
+    width:100%;
+
+    margin-left:0;
+
+}
+
+body{
+
+    flex-direction:column;
+
+}
+
+header{
+
+    flex-direction:column;
+
+    align-items:flex-start;
+
+    gap:20px;
+
+}
+
+.row{
+
+    grid-template-columns:1fr;
+
+}
+
+}
+
+@media(max-width:600px){
+
+.main{
+
+    padding:20px;
+
+}
+
+.form-container{
+
+    padding:20px;
+
+}
+
+header h1{
+
+    font-size:26px;
+
+}
+
+.profile{
+
+    width:100%;
+
+    justify-content:center;
+
+}
+
+.logo h2{
+
+    font-size:20px;
+
+}
+
+button{
+
+    font-size:16px;
+
+}
+
+.preview-container img{
+
+    width:170px;
+
+    height:170px;
+
+}
+
+}
