@@ -1,366 +1,772 @@
 <?php
 session_start();
 
-if(!isset($_SESSION['user_id']))
-{
+/* =========================================================
+   CHECK LOGIN
+   ========================================================= */
+
+if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
     exit();
 }
 
+
+/* =========================================================
+   DATABASE CONNECTION
+   ========================================================= */
+
 include("includes/db.php");
 
-$user_id = $_SESSION['user_id'];
 
-/* Get Logged-in User */
+$user_id = (int) $_SESSION['user_id'];
 
-$user_query = mysqli_query($conn,
-"SELECT * FROM users WHERE user_id='$user_id'");
+
+/* =========================================================
+   GET LOGGED-IN USER
+   ========================================================= */
+
+$user_query = mysqli_query(
+    $conn,
+    "SELECT * FROM users WHERE user_id = '$user_id'"
+);
+
+
+if (!$user_query) {
+    die("Unable to get user details.");
+}
+
 
 $user = mysqli_fetch_assoc($user_query);
 
-/* Get Categories */
 
-$category_query = mysqli_query($conn,
-"SELECT * FROM categories ORDER BY category_name ASC");
+/* =========================================================
+   GET CATEGORIES
+   ========================================================= */
+
+$category_query = mysqli_query(
+    $conn,
+    "SELECT * FROM categories ORDER BY category_name ASC"
+);
+
+
+if (!$category_query) {
+    die("Unable to load categories.");
+}
 
 ?>
+
 <!DOCTYPE html>
+
 <html lang="en">
 
 <head>
 
-<meta charset="UTF-8">
+    <meta charset="UTF-8">
 
-<meta name="viewport"
-content="width=device-width, initial-scale=1.0">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
-<title>Add Item | CampusShare</title>
+    <title>Add Item | CampusShare</title>
 
-<link rel="stylesheet"
-href="css/add_item.css">
 
-<link rel="stylesheet"
-href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <!-- =====================================================
+         CSS
+         ===================================================== -->
 
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
-rel="stylesheet">
+    <link
+        rel="stylesheet"
+        href="css/add_item.css"
+    >
+
+
+    <!-- =====================================================
+         FONT AWESOME
+         ===================================================== -->
+
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+    >
+
+
+    <!-- =====================================================
+         GOOGLE FONT
+         ===================================================== -->
+
+    <link
+        href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet"
+    >
 
 </head>
 
+
 <body>
 
-<!-- Sidebar -->
+
+<!-- =========================================================
+     SIDEBAR
+     ========================================================= -->
 
 <div class="sidebar">
 
-<div class="logo">
 
-<img src="images/logo.png">
+    <!-- LOGO -->
 
-<h2>CampusShare</h2>
+    <div class="logo">
+
+        <img
+            src="images/logo.png"
+            alt="CampusShare Logo"
+        >
+
+        <h2>
+            CampusShare
+        </h2>
+
+    </div>
+
+
+    <!-- MENU -->
+
+    <ul>
+
+
+        <!-- DASHBOARD -->
+
+        <li>
+
+            <a href="dashboard.php">
+
+                <i class="fa fa-house"></i>
+
+                <span>
+                    Dashboard
+                </span>
+
+            </a>
+
+        </li>
+
+
+        <!-- ADD ITEM -->
+
+        <li class="active">
+
+            <a href="add_item.php">
+
+                <i class="fa fa-plus"></i>
+
+                <span>
+                    Add Item
+                </span>
+
+            </a>
+
+        </li>
+
+
+        <!-- BROWSE ITEMS -->
+
+        <li>
+
+            <a href="browse_items.php">
+
+                <i class="fa fa-box"></i>
+
+                <span>
+                    Browse Items
+                </span>
+
+            </a>
+
+        </li>
+
+
+        <!-- MY ITEMS -->
+
+        <li>
+
+            <a href="my_items.php">
+
+                <i class="fa fa-book"></i>
+
+                <span>
+                    My Items
+                </span>
+
+            </a>
+
+        </li>
+
+
+        <!-- PROFILE -->
+
+        <li>
+
+            <a href="profile.php">
+
+                <i class="fa fa-user"></i>
+
+                <span>
+                    Profile
+                </span>
+
+            </a>
+
+        </li>
+
+
+        <!-- LOGOUT -->
+
+        <li>
+
+            <a href="logout.php">
+
+                <i class="fa fa-right-from-bracket"></i>
+
+                <span>
+                    Logout
+                </span>
+
+            </a>
+
+        </li>
+
+
+    </ul>
 
 </div>
 
-<ul>
 
-<li>
 
-<a href="dashboard.php">
-
-<i class="fa fa-house"></i>
-
-Dashboard
-
-</a>
-
-</li>
-
-<li class="active">
-
-<a href="add_item.php">
-
-<i class="fa fa-plus"></i>
-
-Add Item
-
-</a>
-
-</li>
-
-<li>
-
-<a href="browse_items.php">
-
-<i class="fa fa-box"></i>
-
-Browse Items
-
-</a>
-
-</li>
-
-<li>
-
-<a href="my_items.php">
-
-<i class="fa fa-book"></i>
-
-My Items
-
-</a>
-
-</li>
-
-<li>
-
-<a href="profile.php">
-
-<i class="fa fa-user"></i>
-
-Profile
-
-</a>
-
-</li>
-
-<li>
-
-<a href="logout.php">
-
-<i class="fa fa-right-from-bracket"></i>
-
-Logout
-
-</a>
-
-</li>
-
-</ul>
-
-</div>
-
-<!-- Main Content -->
+<!-- =========================================================
+     MAIN CONTENT
+     ========================================================= -->
 
 <div class="main">
 
-<header>
 
-<h1>
+    <!-- =====================================================
+         HEADER
+         ===================================================== -->
 
-Add New Item
+    <header>
 
-</h1>
 
-<div class="profile">
-    <?php
+        <div>
 
-if(!empty($user['profile_image']))
-{
+            <h1>
+                Add New Item
+            </h1>
 
-?>
+            <p class="page-subtitle">
+                Share an item with your campus community
+            </p>
 
-<img src="uploads/<?php echo $user['profile_image']; ?>">
+        </div>
 
-<?php
 
-}
-else
-{
+        <!-- USER PROFILE -->
 
-?>
+        <div class="profile">
 
-<img src="images/default.png">
 
-<?php
+            <?php
 
-}
+            /*
+             * IMPORTANT:
+             *
+             * Never use a Windows path such as:
+             *
+             * C:\xampp\htdocs\...
+             *
+             * in the src attribute.
+             *
+             * Use a web-relative path instead.
+             */
 
-?>
 
-<span>
+            if (
+                !empty($user['profile_image']) &&
+                file_exists(
+                    "uploads/" . $user['profile_image']
+                )
+            ) {
 
-<?php echo $user['full_name']; ?>
+            ?>
 
-</span>
+                <img
+                    src="uploads/<?php
+                    echo htmlspecialchars(
+                        $user['profile_image']
+                    );
+                    ?>"
+                    alt="Profile"
+                >
+
+            <?php
+
+            } else {
+
+            ?>
+
+                <img
+                    src="images/default.png"
+                    alt="Default Profile"
+                >
+
+            <?php
+
+            }
+
+            ?>
+
+
+            <span>
+
+                <?php
+
+                echo htmlspecialchars(
+                    $user['full_name']
+                );
+
+                ?>
+
+            </span>
+
+
+        </div>
+
+
+    </header>
+
+
+
+    <!-- =====================================================
+         FORM CONTAINER
+         ===================================================== -->
+
+    <div class="form-container">
+
+
+        <form
+            action="add_item_process.php"
+            method="POST"
+            enctype="multipart/form-data"
+        >
+
+
+            <!-- =================================================
+                 ITEM NAME
+                 ================================================= -->
+
+            <div class="input-box">
+
+
+                <label for="item_name">
+
+                    Item Name
+
+                </label>
+
+
+                <input
+                    type="text"
+                    id="item_name"
+                    name="item_name"
+                    placeholder="Enter item name"
+                    required
+                >
+
+
+            </div>
+
+
+
+            <!-- =================================================
+                 CATEGORY
+                 ================================================= -->
+
+            <div class="input-box">
+
+
+                <label for="category">
+
+                    Category
+
+                </label>
+
+
+                <select
+                    id="category"
+                    name="category"
+                    required
+                >
+
+                    <option value="">
+
+                        Select Category
+
+                    </option>
+
+
+                    <?php
+
+                    while (
+                        $cat =
+                        mysqli_fetch_assoc(
+                            $category_query
+                        )
+                    ) {
+
+                    ?>
+
+                        <option
+                            value="<?php
+                            echo (int)
+                                $cat['category_id'];
+                            ?>"
+                        >
+
+                            <?php
+
+                            echo htmlspecialchars(
+                                $cat['category_name']
+                            );
+
+                            ?>
+
+                        </option>
+
+                    <?php
+
+                    }
+
+                    ?>
+
+                </select>
+
+
+            </div>
+
+
+
+            <!-- =================================================
+                 DESCRIPTION
+                 ================================================= -->
+
+            <div class="input-box">
+
+
+                <label for="description">
+
+                    Description
+
+                </label>
+
+
+                <textarea
+                    id="description"
+                    name="description"
+                    rows="5"
+                    placeholder="Describe your item"
+                    required
+                ></textarea>
+
+
+            </div>
+
+
+
+            <!-- =================================================
+                 CONDITION + LOCATION
+                 ================================================= -->
+
+            <div class="row">
+
+
+                <!-- CONDITION -->
+
+                <div class="input-box">
+
+
+                    <label for="item_condition">
+
+                        Condition
+
+                    </label>
+
+
+                    <select
+                        id="item_condition"
+                        name="item_condition"
+                        required
+                    >
+
+                        <option value="New">
+                            New
+                        </option>
+
+                        <option value="Like New">
+                            Like New
+                        </option>
+
+                        <option value="Good">
+                            Good
+                        </option>
+
+                        <option value="Fair">
+                            Fair
+                        </option>
+
+                    </select>
+
+
+                </div>
+
+
+
+                <!-- LOCATION -->
+
+                <div class="input-box">
+
+
+                    <label for="location">
+
+                        Location
+
+                    </label>
+
+
+                    <input
+                        type="text"
+                        id="location"
+                        name="location"
+                        placeholder="Library / Hostel / Department"
+                        required
+                    >
+
+
+                </div>
+
+
+            </div>
+
+
+
+            <!-- =================================================
+                 IMAGE UPLOAD
+                 ================================================= -->
+
+            <div class="input-box">
+
+
+                <label for="item_image">
+
+                    Upload Item Image
+
+                </label>
+
+
+                <div class="image-upload-box">
+
+
+                    <input
+                        type="file"
+                        id="item_image"
+                        name="item_image"
+                        accept="image/jpeg,image/jpg,image/png"
+                        required
+                    >
+
+
+                    <p class="upload-help">
+
+                        <i class="fa fa-image"></i>
+
+                        Select JPG, JPEG or PNG image
+
+                    </p>
+
+
+                </div>
+
+
+            </div>
+
+
+
+            <!-- =================================================
+                 IMAGE PREVIEW
+                 ================================================= -->
+
+            <div
+                id="image-preview-container"
+                class="image-preview-container"
+                style="display: none;"
+            >
+
+
+                <p class="preview-title">
+
+                    Image Preview
+
+                </p>
+
+
+                <img
+                    id="image-preview"
+                    src=""
+                    alt="Selected Item Image"
+                >
+
+
+            </div>
+
+
+
+            <!-- =================================================
+                 SUBMIT BUTTON
+                 ================================================= -->
+
+            <button
+                type="submit"
+                class="add-item-button"
+            >
+
+                <i class="fa fa-upload"></i>
+
+                Add Item
+
+            </button>
+
+
+        </form>
+
+
+    </div>
+
 
 </div>
 
-</header>
 
-<div class="form-container">
 
-<form
+<!-- =========================================================
+     IMAGE PREVIEW JAVASCRIPT
+     ========================================================= -->
 
-action="add_item_process.php"
+<script>
 
-method="POST"
+const imageInput =
+    document.getElementById("item_image");
 
-enctype="multipart/form-data">
+const imagePreview =
+    document.getElementById("image-preview");
 
-<div class="input-box">
+const previewContainer =
+    document.getElementById(
+        "image-preview-container"
+    );
 
-<label>
 
-Item Name
+imageInput.addEventListener(
+    "change",
+    function () {
 
-</label>
+        const file = this.files[0];
 
-<input
 
-type="text"
+        if (!file) {
 
-name="item_name"
+            previewContainer.style.display =
+                "none";
 
-placeholder="Enter Item Name"
+            imagePreview.src = "";
 
-required>
+            return;
 
-</div>
+        }
 
-<div class="input-box">
 
-<label>
+        /* Check image type */
 
-Category
+        const allowedTypes = [
+            "image/jpeg",
+            "image/jpg",
+            "image/png"
+        ];
 
-</label>
 
-<select
+        if (
+            !allowedTypes.includes(
+                file.type
+            )
+        ) {
 
-name="category"
+            alert(
+                "Please select a JPG, JPEG or PNG image."
+            );
 
-required>
+            this.value = "";
 
-<option value="">
+            previewContainer.style.display =
+                "none";
 
-Select Category
+            return;
 
-</option>
+        }
 
-<?php
 
-while($cat=mysqli_fetch_assoc($category_query))
-{
+        /* Check file size */
 
-?>
+        const maxSize =
+            5 * 1024 * 1024;
 
-<option value="<?php echo $cat['category_id'];?>">
 
-<?php echo $cat['category_name'];?>
+        if (file.size > maxSize) {
 
-</option>
+            alert(
+                "Image size must be less than 5 MB."
+            );
 
-<?php
+            this.value = "";
 
-}
+            previewContainer.style.display =
+                "none";
 
-?>
+            return;
 
-</select>
+        }
 
-</div>
 
-<div class="input-box">
+        /* Show preview */
 
-<label>
+        const reader =
+            new FileReader();
 
-Description
 
-</label>
+        reader.onload =
+            function (event) {
 
-<textarea
+                imagePreview.src =
+                    event.target.result;
 
-name="description"
+                previewContainer.style.display =
+                    "block";
 
-rows="5"
+            };
 
-required
 
-placeholder="Describe your item"></textarea>
+        reader.readAsDataURL(file);
 
-</div>
+    }
+);
 
-<div class="row">
+</script>
 
-<div class="input-box">
-
-<label>
-
-Condition
-
-</label>
-
-<select name="item_condition">
-
-<option>New</option>
-
-<option>Like New</option>
-
-<option>Good</option>
-
-<option>Fair</option>
-
-</select>
-
-</div>
-
-<div class="input-box">
-
-<label>
-
-Location
-
-</label>
-
-<input
-
-type="text"
-
-name="location"
-
-required
-
-placeholder="Library / Hostel / Department">
-
-</div>
-
-</div>
-
-<div class="input-box">
-
-<label>
-
-Upload Image
-
-</label>
-
-<input
-
-type="file"
-
-name="item_image"
-
-accept=".jpg,.jpeg,.png"
-
-required>
-
-</div>
-
-<button type="submit">
-
-<i class="fa fa-upload"></i>
-
-Add Item
-
-</button>
-
-</form>
-
-</div>
-</div>
-</div>
-
-<script src="js/add_item.js"></script>
 
 </body>
 

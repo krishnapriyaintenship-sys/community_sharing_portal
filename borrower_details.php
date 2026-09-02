@@ -1,63 +1,53 @@
 <?php
-
 session_start();
 
+require_once 'includes/db.php';
+
+
+/* =========================================================
+   CHECK LOGIN
+   ========================================================= */
+
 if (!isset($_SESSION['user_id'])) {
-
     header("Location: login.php");
-
     exit();
 }
 
-include("includes/db.php");
-
-$user_id = $_SESSION['user_id'];
+$user_id = (int) $_SESSION['user_id'];
 
 
-/* Check request ID */
+/* =========================================================
+   GET REQUEST ID
+   ========================================================= */
 
-if (!isset($_GET['request_id']) || empty($_GET['request_id'])) {
-
-    echo "<script>
-            alert('Invalid Request ID.');
-            window.location='manage_requests.php';
-          </script>";
-
+if (!isset($_GET['request_id']) || !is_numeric($_GET['request_id'])) {
+    header("Location: manage_requests.php");
     exit();
 }
 
+$request_id = (int) $_GET['request_id'];
 
-$request_id = intval($_GET['request_id']);
 
+/* =========================================================
+   GET BORROWER DETAILS
+   Only the owner of the item can see the details.
+   ========================================================= */
 
-/*
-   Get borrower details.
-
-   Important:
-   i.user_id = logged-in user
-   This ensures that only the owner of the item
-   can see the borrower's details.
-*/
-
-$query = mysqli_query($conn, "
-
+$sql = "
     SELECT
-
         br.request_id,
+        br.status,
         br.borrow_date,
         br.expected_return_date,
         br.actual_return_date,
-        br.status,
-        br.request_date,
 
         i.item_id,
         i.item_name,
 
         u.user_id AS borrower_id,
-        u.full_name,
-        u.email,
-        u.phone,
-        u.profile_image
+        u.full_name AS borrower_name,
+        u.email AS borrower_email,
+        u.phone AS borrower_phone
 
     FROM borrow_requests br
 
@@ -67,27 +57,72 @@ $query = mysqli_query($conn, "
     INNER JOIN users u
         ON br.borrower_id = u.user_id
 
-    WHERE br.request_id='$request_id'
+    WHERE br.request_id = ?
+    AND i.user_id = ?
 
-    AND i.user_id='$user_id'
+    LIMIT 1
+";
 
-");
+
+$stmt = mysqli_prepare($conn, $sql);
+
+if (!$stmt) {
+    die("Database error: " . mysqli_error($conn));
+}
 
 
-/* Request not found */
+mysqli_stmt_bind_param(
+    $stmt,
+    "ii",
+    $request_id,
+    $user_id
+);
 
-if (!$query || mysqli_num_rows($query) == 0) {
 
-    echo "<script>
-            alert('Borrow request not found.');
-            window.location='manage_requests.php';
-          </script>";
+mysqli_stmt_execute($stmt);
 
+$result = mysqli_stmt_get_result($stmt);
+
+
+/* =========================================================
+   REQUEST NOT FOUND
+   ========================================================= */
+
+if (mysqli_num_rows($result) === 0) {
+
+    mysqli_stmt_close($stmt);
+
+    header("Location: manage_requests.php");
     exit();
 }
 
 
-$request = mysqli_fetch_assoc($query);
+$borrower = mysqli_fetch_assoc($result);
+
+mysqli_stmt_close($stmt);
+
+
+/* =========================================================
+   STATUS CLASS
+   ========================================================= */
+
+$status = strtolower(
+    trim($borrower['status'])
+);
+
+$status_class = "bd-pending";
+
+if ($status === "approved") {
+    $status_class = "bd-approved";
+}
+
+if ($status === "returned") {
+    $status_class = "bd-returned";
+}
+
+if ($status === "rejected") {
+    $status_class = "bd-rejected";
+}
 
 ?>
 
@@ -97,307 +132,616 @@ $request = mysqli_fetch_assoc($query);
 
 <head>
 
-<meta charset="UTF-8">
+    <meta charset="UTF-8">
 
-<meta name="viewport"
-content="width=device-width, initial-scale=1.0">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
-<title>Borrower Details | CampusShare</title>
+    <title>
+        Borrower Details - CampusShare
+    </title>
 
-<link rel="stylesheet"
-href="css/borrower_details.css">
 
-<link rel="stylesheet"
-href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <!-- =====================================================
+         IMPORTANT:
+         SEPARATE CSS FOR BORROWER DETAILS
+         ===================================================== -->
+
+    <link
+        rel="stylesheet"
+        type="text/css"
+        href="/CommunityItemSharingPortal/css/borrower_details.css?v=10"
+    >
 
 </head>
 
 
-<body>
+<body class="bd-page">
 
 
-<div class="container">
+<!-- =========================================================
+     SIDEBAR
+     ========================================================= -->
+
+<aside class="bd-sidebar">
 
 
-    <!-- PAGE TITLE -->
+    <!-- =====================================================
+         LOGO
+         ===================================================== -->
 
-    <h1>
+    <div class="bd-logo-box">
 
-        <i class="fa-solid fa-user"></i>
+        <img
+            src="/CommunityItemSharingPortal/images/logo.png"
+            alt="CampusShare Logo"
+            width="60"
+            height="60"
+            class="bd-logo"
+        >
 
-        Borrower Details
-
-    </h1>
-
-
-    <!-- BORROWER CARD -->
-
-    <div class="card">
-
-
-        <div class="profile-section">
-
-            <?php
-
-            if (
-                !empty($request['profile_image']) &&
-                file_exists(
-                    "uploads/" . $request['profile_image']
-                )
-            ) {
-
-            ?>
-
-                <img
-                    src="uploads/<?php
-                    echo htmlspecialchars(
-                        $request['profile_image']
-                    );
-                    ?>"
-                    class="profile-image"
-                    alt="Profile">
-
-            <?php
-
-            } else {
-
-            ?>
-
-                <img
-                    src="images/default.png"
-                    class="profile-image"
-                    alt="Profile">
-
-            <?php
-
-            }
-
-            ?>
-
-        </div>
-
-
-        <div class="details">
-
-
-            <h2>
-
-                <?php
-                echo htmlspecialchars(
-                    $request['full_name']
-                );
-                ?>
-
-            </h2>
-
-
-            <p>
-
-                <strong>
-
-                    <i class="fa-solid fa-envelope"></i>
-
-                    Email:
-
-                </strong>
-
-                <?php
-                echo htmlspecialchars(
-                    $request['email']
-                );
-                ?>
-
-            </p>
-
-
-            <p>
-
-                <strong>
-
-                    <i class="fa-solid fa-phone"></i>
-
-                    Phone:
-
-                </strong>
-
-                <?php
-
-                if (!empty($request['phone'])) {
-
-                    echo htmlspecialchars(
-                        $request['phone']
-                    );
-
-                } else {
-
-                    echo "Not provided";
-
-                }
-
-                ?>
-
-            </p>
-
-
+        <div class="bd-logo-name">
+            CampusShare
         </div>
 
     </div>
 
 
+    <!-- =====================================================
+         NAVIGATION
+         ===================================================== -->
 
-    <!-- BORROW REQUEST DETAILS -->
-
-    <div class="card request-card">
-
-
-        <h2>
-
-            <i class="fa-solid fa-handshake"></i>
-
-            Borrow Request Details
-
-        </h2>
+    <nav class="bd-nav">
 
 
-        <p>
+        <a href="dashboard.php">
 
-            <strong>Item:</strong>
+            <span class="bd-icon">⌂</span>
 
-            <?php
-            echo htmlspecialchars(
-                $request['item_name']
-            );
-            ?>
-
-        </p>
-
-
-        <p>
-
-            <strong>Borrow Date:</strong>
-
-            <?php
-            echo date(
-                "d M Y",
-                strtotime(
-                    $request['borrow_date']
-                )
-            );
-            ?>
-
-        </p>
-
-
-        <p>
-
-            <strong>Expected Return Date:</strong>
-
-            <?php
-            echo date(
-                "d M Y",
-                strtotime(
-                    $request['expected_return_date']
-                )
-            );
-            ?>
-
-        </p>
-
-
-        <?php
-
-        if (!empty($request['actual_return_date'])) {
-
-        ?>
-
-        <p>
-
-            <strong>Actual Return Date:</strong>
-
-            <?php
-
-            echo date(
-                "d M Y",
-                strtotime(
-                    $request['actual_return_date']
-                )
-            );
-
-            ?>
-
-        </p>
-
-        <?php
-
-        }
-
-        ?>
-
-
-        <p>
-
-            <strong>Status:</strong>
-
-            <span class="status">
-
-                <?php
-                echo htmlspecialchars(
-                    $request['status']
-                );
-                ?>
-
+            <span>
+                Dashboard
             </span>
-
-        </p>
-
-
-        <p>
-
-            <strong>Request Date:</strong>
-
-            <?php
-
-            if (!empty($request['request_date'])) {
-
-                echo date(
-                    "d M Y h:i A",
-                    strtotime(
-                        $request['request_date']
-                    )
-                );
-
-            } else {
-
-                echo "Not available";
-
-            }
-
-            ?>
-
-        </p>
-
-
-    </div>
-
-
-    <!-- BACK BUTTON -->
-
-    <div class="back">
-
-        <a
-            href="manage_requests.php"
-            class="back-btn">
-
-            <i class="fa-solid fa-arrow-left"></i>
-
-            Back to Manage Requests
 
         </a>
 
+
+        <a href="add_item.php">
+
+            <span class="bd-icon">＋</span>
+
+            <span>
+                Add Item
+            </span>
+
+        </a>
+
+
+        <a href="my_items.php">
+
+            <span class="bd-icon">▣</span>
+
+            <span>
+                My Items
+            </span>
+
+        </a>
+
+
+        <a href="browse_items.php">
+
+            <span class="bd-icon">⌕</span>
+
+            <span>
+                Browse Items
+            </span>
+
+        </a>
+
+
+        <a
+            href="manage_requests.php"
+            class="bd-active"
+        >
+
+            <span class="bd-icon">▤</span>
+
+            <span>
+                Manage Requests
+            </span>
+
+        </a>
+
+
+        <a href="notifications.php">
+
+            <span class="bd-icon">♢</span>
+
+            <span>
+                Notifications
+            </span>
+
+        </a>
+
+
+        <a href="profile.php">
+
+            <span class="bd-icon">♙</span>
+
+            <span>
+                Profile
+            </span>
+
+        </a>
+
+
+        <a href="logout.php">
+
+            <span class="bd-icon">⇥</span>
+
+            <span>
+                Logout
+            </span>
+
+        </a>
+
+
+    </nav>
+
+</aside>
+
+
+
+<!-- =========================================================
+     MAIN CONTENT
+     ========================================================= -->
+
+<main class="bd-main">
+
+
+    <!-- =====================================================
+         PAGE HEADER
+         ===================================================== -->
+
+    <div class="bd-header">
+
+
+        <div class="bd-label">
+            BORROWER INFORMATION
+        </div>
+
+
+        <h1>
+            Borrower Details
+        </h1>
+
+
+        <p>
+            View the contact and borrowing information of the borrower.
+        </p>
+
+
     </div>
 
 
-</div>
+
+    <!-- =====================================================
+         BACK BUTTON
+         ===================================================== -->
+
+    <a
+        href="manage_requests.php"
+        class="bd-back-button"
+    >
+
+        ← Back to Manage Requests
+
+    </a>
+
+
+
+    <!-- =====================================================
+         DETAILS CARD
+         ===================================================== -->
+
+    <div class="bd-details-card">
+
+
+        <!-- =================================================
+             CARD HEADER
+             ================================================= -->
+
+        <div class="bd-card-header">
+
+
+            <div class="bd-profile-section">
+
+
+                <div class="bd-avatar">
+
+                    <?php
+
+                    $name = trim(
+                        $borrower['borrower_name']
+                    );
+
+                    $first_letter = !empty($name)
+                        ? strtoupper($name[0])
+                        : "U";
+
+                    echo htmlspecialchars(
+                        $first_letter
+                    );
+
+                    ?>
+
+                </div>
+
+
+                <div>
+
+                    <h2>
+                        <?= htmlspecialchars(
+                            $borrower['borrower_name']
+                        ); ?>
+                    </h2>
+
+                    <p>
+                        Borrower
+                    </p>
+
+                </div>
+
+
+            </div>
+
+
+            <!-- STATUS -->
+
+            <span
+                class="bd-status <?= $status_class; ?>"
+            >
+
+                <?= htmlspecialchars(
+                    ucfirst($borrower['status'])
+                ); ?>
+
+            </span>
+
+
+        </div>
+
+
+
+        <!-- =================================================
+             BORROWER INFORMATION
+             ================================================= -->
+
+        <div class="bd-section">
+
+
+            <h3>
+                Contact Information
+            </h3>
+
+
+            <!-- NAME -->
+
+            <div class="bd-info-row">
+
+
+                <div class="bd-info-icon">
+                    👤
+                </div>
+
+
+                <div class="bd-info-content">
+
+                    <span class="bd-info-label">
+                        Full Name
+                    </span>
+
+                    <span class="bd-info-value">
+                        <?= htmlspecialchars(
+                            $borrower['borrower_name']
+                        ); ?>
+                    </span>
+
+                </div>
+
+
+            </div>
+
+
+
+            <!-- EMAIL -->
+
+            <div class="bd-info-row">
+
+
+                <div class="bd-info-icon">
+                    ✉
+                </div>
+
+
+                <div class="bd-info-content">
+
+                    <span class="bd-info-label">
+                        Email
+                    </span>
+
+                    <span class="bd-info-value">
+
+                        <?php if (!empty($borrower['borrower_email'])): ?>
+
+                            <?= htmlspecialchars(
+                                $borrower['borrower_email']
+                            ); ?>
+
+                        <?php else: ?>
+
+                            Not available
+
+                        <?php endif; ?>
+
+                    </span>
+
+                </div>
+
+
+            </div>
+
+
+
+            <!-- PHONE -->
+
+            <div class="bd-info-row">
+
+
+                <div class="bd-info-icon">
+                    ☎
+                </div>
+
+
+                <div class="bd-info-content">
+
+                    <span class="bd-info-label">
+                        Phone
+                    </span>
+
+                    <span class="bd-info-value">
+
+                        <?php if (!empty($borrower['borrower_phone'])): ?>
+
+                            <?= htmlspecialchars(
+                                $borrower['borrower_phone']
+                            ); ?>
+
+                        <?php else: ?>
+
+                            Not available
+
+                        <?php endif; ?>
+
+                    </span>
+
+                </div>
+
+
+            </div>
+
+
+        </div>
+
+
+
+        <!-- =================================================
+             BORROWING INFORMATION
+             ================================================= -->
+
+        <div class="bd-section">
+
+
+            <h3>
+                Borrowing Information
+            </h3>
+
+
+            <!-- ITEM -->
+
+            <div class="bd-info-row">
+
+
+                <div class="bd-info-icon">
+                    ▣
+                </div>
+
+
+                <div class="bd-info-content">
+
+                    <span class="bd-info-label">
+                        Item
+                    </span>
+
+                    <span class="bd-info-value">
+                        <?= htmlspecialchars(
+                            $borrower['item_name']
+                        ); ?>
+                    </span>
+
+                </div>
+
+
+            </div>
+
+
+
+            <!-- BORROW DATE -->
+
+            <div class="bd-info-row">
+
+
+                <div class="bd-info-icon">
+                    📅
+                </div>
+
+
+                <div class="bd-info-content">
+
+                    <span class="bd-info-label">
+                        Borrow Date
+                    </span>
+
+                    <span class="bd-info-value">
+
+                        <?php
+
+                        if (!empty($borrower['borrow_date'])) {
+
+                            echo date(
+                                "d M Y",
+                                strtotime(
+                                    $borrower['borrow_date']
+                                )
+                            );
+
+                        } else {
+
+                            echo "Not available";
+
+                        }
+
+                        ?>
+
+                    </span>
+
+                </div>
+
+
+            </div>
+
+
+
+            <!-- EXPECTED RETURN -->
+
+            <div class="bd-info-row">
+
+
+                <div class="bd-info-icon">
+                    📅
+                </div>
+
+
+                <div class="bd-info-content">
+
+                    <span class="bd-info-label">
+                        Expected Return
+                    </span>
+
+                    <span class="bd-info-value">
+
+                        <?php
+
+                        if (
+                            !empty(
+                                $borrower[
+                                    'expected_return_date'
+                                ]
+                            )
+                        ) {
+
+                            echo date(
+                                "d M Y",
+                                strtotime(
+                                    $borrower[
+                                        'expected_return_date'
+                                    ]
+                                )
+                            );
+
+                        } else {
+
+                            echo "Not available";
+
+                        }
+
+                        ?>
+
+                    </span>
+
+                </div>
+
+
+            </div>
+
+
+
+            <!-- ACTUAL RETURN -->
+
+            <?php if (!empty($borrower['actual_return_date'])): ?>
+
+                <div class="bd-info-row">
+
+
+                    <div class="bd-info-icon">
+                        ✓
+                    </div>
+
+
+                    <div class="bd-info-content">
+
+                        <span class="bd-info-label">
+                            Actual Return
+                        </span>
+
+                        <span class="bd-info-value">
+
+                            <?= date(
+                                "d M Y",
+                                strtotime(
+                                    $borrower[
+                                        'actual_return_date'
+                                    ]
+                                )
+                            ); ?>
+
+                        </span>
+
+                    </div>
+
+
+                </div>
+
+            <?php endif; ?>
+
+
+        </div>
+
+
+
+        <!-- =================================================
+             BOTTOM BUTTON
+             ================================================= -->
+
+        <div class="bd-bottom">
+
+            <a
+                href="manage_requests.php"
+                class="bd-main-button"
+            >
+
+                ← Back to Manage Requests
+
+            </a>
+
+        </div>
+
+
+    </div>
+
+
+</main>
 
 
 </body>
