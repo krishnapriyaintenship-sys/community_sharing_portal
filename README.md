@@ -4,12 +4,12 @@ A simple web-based platform that allows users to **share, request and borrow wit
 
 ## 🛠️ Technologies Used
 
-- HTML
-- CSS
-- JavaScript
-- PHP
-- MySQL
-- XAMPP
+- HTML#
+- CSS#
+- JavaScript#
+- PHP#
+- MySQL#
+- XAMPP#
 
 ## 👩‍💻 Team Members & Contributions
 
