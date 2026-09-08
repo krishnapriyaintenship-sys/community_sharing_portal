@@ -445,7 +445,9 @@ body {
 }
 
 
-/* CARD HEADER */
+/* =====================================================
+   CARD HEADER
+===================================================== */
 
 .card-header {
     display: flex;
@@ -469,7 +471,9 @@ body {
 }
 
 
-/* STATUS */
+/* =====================================================
+   STATUS
+===================================================== */
 
 .status {
     display: inline-flex;
@@ -512,6 +516,15 @@ body {
 
 .status.rejected .status-dot {
     background: #ef4444;
+}
+
+.status.return-requested {
+    background: #fff7ed;
+    color: #b45309;
+}
+
+.status.return-requested .status-dot {
+    background: #f59e0b;
 }
 
 .status.returned {
@@ -801,6 +814,65 @@ body {
     background: #1d4ed8;
 }
 
+
+/* =====================================================
+   RETURN REQUEST ACTIONS
+===================================================== */
+
+.return-request-box {
+    width: 100%;
+    background: #fffbeb;
+    border: 1px solid #fcd34d;
+    border-left: 5px solid #f59e0b;
+    border-radius: 10px;
+    padding: 18px;
+}
+
+.return-request-title {
+    margin: 0 0 8px;
+    color: #92400e;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.return-request-text {
+    margin: 0 0 15px;
+    color: #78350f;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.return-request-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.return-accept-button {
+    background: #16a34a !important;
+    color: white !important;
+    border: none;
+}
+
+.return-accept-button:hover {
+    background: #15803d !important;
+}
+
+.return-reject-button {
+    background: #dc2626 !important;
+    color: white !important;
+    border: none;
+}
+
+.return-reject-button:hover {
+    background: #b91c1c !important;
+}
+
+
+/* =====================================================
+   COMPLETED STATUS
+===================================================== */
+
 .completed {
     display: flex;
     align-items: center;
@@ -819,6 +891,11 @@ body {
 .returned-complete {
     background: #eff6ff;
     color: #1d4ed8;
+}
+
+.return-requested-complete {
+    background: #fff7ed;
+    color: #b45309;
 }
 
 .completed span {
@@ -1256,6 +1333,18 @@ body {
         width: 100%;
     }
 
+    .return-request-actions {
+        flex-direction: column;
+    }
+
+    .return-request-actions form {
+        width: 100%;
+    }
+
+    .return-request-actions .action-btn {
+        width: 100%;
+    }
+
 }
 
 
@@ -1289,6 +1378,18 @@ body {
 
     .action-group {
         flex-direction: column;
+    }
+
+    .return-request-box {
+        padding: 14px;
+    }
+
+    .return-request-title {
+        font-size: 14px;
+    }
+
+    .return-request-text {
+        font-size: 12px;
     }
 
 }

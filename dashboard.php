@@ -26,6 +26,7 @@ if(mysqli_num_rows($user_query)==0)
 
 $user = mysqli_fetch_assoc($user_query);
 
+
 /* ===========================
    Search
 =========================== */
@@ -36,6 +37,7 @@ if(isset($_GET['search']))
 {
     $search = mysqli_real_escape_string($conn, trim($_GET['search']));
 }
+
 
 /* ===========================
    Recently Added Items
@@ -65,6 +67,7 @@ LIMIT 6
 
 $item_result = mysqli_query($conn,$item_sql);
 
+
 /* ===========================
    Dashboard Statistics
 =========================== */
@@ -78,6 +81,7 @@ WHERE user_id='$user_id'
 ")
 );
 
+
 // Borrowed Items
 $borrowed_items = mysqli_num_rows(
 mysqli_query($conn,"
@@ -88,6 +92,7 @@ AND status='Approved'
 ")
 );
 
+
 // Available Items
 $available_items = mysqli_num_rows(
 mysqli_query($conn,"
@@ -96,6 +101,7 @@ FROM items
 WHERE availability='Available'
 ")
 );
+
 
 // Pending Requests
 $pending_requests = mysqli_num_rows(
@@ -106,6 +112,7 @@ WHERE owner_id='$user_id'
 AND status='Pending'
 ")
 );
+
 
 /* ===========================
    Notification Count
@@ -157,6 +164,7 @@ rel="stylesheet">
 
 <body>
 
+
 <!-- =========================
      Sidebar
 ========================= -->
@@ -173,6 +181,8 @@ rel="stylesheet">
 
     <ul>
 
+        <!-- Dashboard -->
+
         <li class="active">
 
             <a href="dashboard.php">
@@ -184,6 +194,9 @@ rel="stylesheet">
             </a>
 
         </li>
+
+
+        <!-- Add Item -->
 
         <li>
 
@@ -197,6 +210,9 @@ rel="stylesheet">
 
         </li>
 
+
+        <!-- Browse Items -->
+
         <li>
 
             <a href="browse_items.php">
@@ -208,6 +224,24 @@ rel="stylesheet">
             </a>
 
         </li>
+
+
+        <!-- My Borrow Requests - ADDED -->
+
+        <li>
+
+            <a href="my_borrow_requests.php">
+
+                <i class="fa-solid fa-handshake"></i>
+
+                My Borrow Requests
+
+            </a>
+
+        </li>
+
+
+        <!-- My Items -->
 
         <li>
 
@@ -221,6 +255,9 @@ rel="stylesheet">
 
         </li>
 
+
+        <!-- Borrow History -->
+
         <li>
 
             <a href="borrow_history.php">
@@ -232,6 +269,9 @@ rel="stylesheet">
             </a>
 
         </li>
+
+
+        <!-- Notifications -->
 
         <li>
 
@@ -260,6 +300,9 @@ rel="stylesheet">
 
         </li>
 
+
+        <!-- Profile -->
+
         <li>
 
             <a href="profile.php">
@@ -271,6 +314,9 @@ rel="stylesheet">
             </a>
 
         </li>
+
+
+        <!-- Logout -->
 
         <li>
 
@@ -288,12 +334,16 @@ rel="stylesheet">
 
 </div>
 
+
+
 <!-- =========================
      Main Content
 ========================= -->
 
 <div class="main">
-    <!-- =========================
+
+
+<!-- =========================
      Header
 ========================= -->
 
@@ -314,6 +364,7 @@ value="<?php echo htmlspecialchars($search); ?>">
 </button>
 
 </form>
+
 
 <div class="profile">
 
@@ -337,6 +388,7 @@ if($notification_count > 0)
 ?>
 
 </a>
+
 
 <?php
 
@@ -368,6 +420,7 @@ alt="Profile">
 
 ?>
 
+
 <span>
 
 <?php echo htmlspecialchars($user['full_name']); ?>
@@ -377,6 +430,9 @@ alt="Profile">
 </div>
 
 </header>
+
+
+
 <!-- =========================
      Welcome Section
 ========================= -->
@@ -398,6 +454,7 @@ Share books, calculators, laptops, project kits and help your college community.
 
 </p>
 
+
 <div class="welcome-buttons">
 
 <a href="add_item.php" class="btn-primary">
@@ -407,6 +464,7 @@ Share books, calculators, laptops, project kits and help your college community.
 Add Item
 
 </a>
+
 
 <a href="browse_items.php" class="btn-secondary">
 
@@ -420,6 +478,7 @@ Browse Items
 
 </div>
 
+
 <div class="welcome-image">
 
 <img
@@ -429,11 +488,15 @@ alt="CampusShare Banner">
 </div>
 
 </section>
+
+
+
 <!-- =========================
      Statistics Cards
 ========================= -->
 
 <section class="cards">
+
 
 <div class="card">
 
@@ -453,6 +516,8 @@ alt="CampusShare Banner">
 
 </div>
 
+
+
 <div class="card">
 
 <div class="card-icon green">
@@ -471,6 +536,8 @@ alt="CampusShare Banner">
 
 </div>
 
+
+
 <div class="card">
 
 <div class="card-icon orange">
@@ -488,6 +555,8 @@ alt="CampusShare Banner">
 </div>
 
 </div>
+
+
 
 <div class="card">
 
@@ -508,6 +577,9 @@ alt="CampusShare Banner">
 </div>
 
 </section>
+
+
+
 <!-- =========================
      Quick Actions
 ========================= -->
@@ -516,7 +588,11 @@ alt="CampusShare Banner">
 
 <h2>Quick Actions</h2>
 
+
 <div class="action-container">
+
+
+<!-- Add Item -->
 
 <a href="add_item.php" class="action-card">
 
@@ -528,6 +604,10 @@ alt="CampusShare Banner">
 
 </a>
 
+
+
+<!-- Browse Items -->
+
 <a href="browse_items.php" class="action-card">
 
 <i class="fa-solid fa-magnifying-glass"></i>
@@ -538,6 +618,24 @@ alt="CampusShare Banner">
 
 </a>
 
+
+
+<!-- My Borrow Requests - ADDED -->
+
+<a href="my_borrow_requests.php" class="action-card">
+
+<i class="fa-solid fa-handshake"></i>
+
+<h3>My Borrow Requests</h3>
+
+<p>View your requests and return borrowed items.</p>
+
+</a>
+
+
+
+<!-- Borrow History -->
+
 <a href="borrow_history.php" class="action-card">
 
 <i class="fa-solid fa-clock-rotate-left"></i>
@@ -547,6 +645,10 @@ alt="CampusShare Banner">
 <p>View all your borrowing records.</p>
 
 </a>
+
+
+
+<!-- Notifications -->
 
 <a href="notifications.php" class="action-card">
 
@@ -578,9 +680,13 @@ new reminder(s).
 
 </a>
 
+
 </div>
 
 </section>
+
+
+
 <!-- =========================
      Recently Added Items
 ========================= -->
@@ -588,6 +694,7 @@ new reminder(s).
 <section class="recent-items">
 
 <h2>Recently Added Items</h2>
+
 
 <div class="items">
 
@@ -602,6 +709,7 @@ while($item=mysqli_fetch_assoc($item_result))
 ?>
 
 <div class="item-card">
+
 
 <?php
 
@@ -632,13 +740,16 @@ alt="No Image">
 
 ?>
 
+
 <div class="item-details">
+
 
 <h3>
 
 <?php echo htmlspecialchars($item['item_name']); ?>
 
 </h3>
+
 
 <p>
 
@@ -648,6 +759,7 @@ alt="No Image">
 
 </p>
 
+
 <p>
 
 <strong>Location :</strong>
@@ -656,6 +768,7 @@ alt="No Image">
 
 </p>
 
+
 <p>
 
 <strong>Condition :</strong>
@@ -663,6 +776,7 @@ alt="No Image">
 <?php echo htmlspecialchars($item['item_condition']); ?>
 
 </p>
+
 
 <p>
 
@@ -701,6 +815,7 @@ Not Available
 
 </p>
 
+
 <a
 href="borrow_request.php?item_id=<?php echo $item['item_id']; ?>"
 class="view-btn">
@@ -708,6 +823,7 @@ class="view-btn">
 Borrow Item
 
 </a>
+
 
 </div>
 
@@ -738,6 +854,9 @@ No items found.
 </div>
 
 </section>
+
+
+
 <!-- =========================
      Return Reminder Popup
 ========================= -->
@@ -760,6 +879,7 @@ borrow_requests.expected_return_date='$tomorrow'
 LIMIT 1
 ");
 
+
 if(mysqli_num_rows($reminder)>0)
 {
 
@@ -776,6 +896,7 @@ $row = mysqli_fetch_assoc($reminder);
 🔔 Return Reminder
 
 </h3>
+
 
 <p>
 
@@ -797,6 +918,7 @@ before
 
 </p>
 
+
 <button onclick="closeReminder()">
 
 OK
@@ -813,14 +935,16 @@ OK
 
 ?>
 
+
 <script>
 
 function closeReminder()
 {
-document.querySelector(".reminder-popup").style.display="none";
+    document.querySelector(".reminder-popup").style.display="none";
 }
 
 </script>
+
 
 </div>
 

@@ -122,20 +122,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
 
 
 /* =====================================================
-   MARK AS RETURNED
+   ACCEPT RETURN REQUEST
 ===================================================== */
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST'
-    && isset($_POST['return_request'])) {
+    && isset($_POST['accept_return'])) {
 
     $request_id = (int)($_POST['request_id'] ?? 0);
 
+    /*
+     * When owner accepts the return:
+     *
+     * Return Requested
+     *        ↓
+     * Returned
+     *
+     * actual_return_date = current date
+     * returned_date      = current date/time
+     */
+
     $sql = "UPDATE borrow_requests
             SET status = 'Returned',
+                actual_return_date = CURDATE(),
                 returned_date = NOW()
             WHERE request_id = ?
               AND owner_id = ?
-              AND status = 'Approved'";
+              AND status = 'Return Requested'";
 
     $stmt = $conn->prepare($sql);
 
@@ -149,12 +161,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
 
         if ($stmt->execute() && $stmt->affected_rows > 0) {
 
-            $message = "Item marked as returned.";
+            $message = "Return request accepted. Item marked as returned.";
             $message_type = "success";
 
         } else {
 
-            $message = "Unable to mark item as returned.";
+            $message = "Unable to accept this return request.";
+            $message_type = "error";
+        }
+
+        $stmt->close();
+
+    } else {
+
+        $message = "Database error.";
+        $message_type = "error";
+    }
+}
+
+
+/* =====================================================
+   REJECT RETURN REQUEST
+===================================================== */
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST'
+    && isset($_POST['reject_return'])) {
+
+    $request_id = (int)($_POST['request_id'] ?? 0);
+
+    /*
+     * When owner rejects the return:
+     *
+     * Return Requested
+     *        ↓
+     * Approved
+     *
+     * The item remains borrowed.
+     */
+
+    $sql = "UPDATE borrow_requests
+            SET status = 'Approved'
+            WHERE request_id = ?
+              AND owner_id = ?
+              AND status = 'Return Requested'";
+
+    $stmt = $conn->prepare($sql);
+
+    if ($stmt) {
+
+        $stmt->bind_param(
+            "ii",
+            $request_id,
+            $owner_id
+        );
+
+        if ($stmt->execute() && $stmt->affected_rows > 0) {
+
+            $message = "Return request rejected. Item remains borrowed.";
+            $message_type = "success";
+
+        } else {
+
+            $message = "Unable to reject this return request.";
             $message_type = "error";
         }
 
@@ -215,6 +283,7 @@ $total = count($requests);
 $pending = 0;
 $approved = 0;
 $rejected = 0;
+$return_requested = 0;
 $returned = 0;
 
 foreach ($requests as $request) {
@@ -229,6 +298,10 @@ foreach ($requests as $request) {
 
     if ($request['status'] === 'Rejected') {
         $rejected++;
+    }
+
+    if ($request['status'] === 'Return Requested') {
+        $return_requested++;
     }
 
     if ($request['status'] === 'Returned') {
@@ -549,6 +622,11 @@ body {
     color: #991b1b;
 }
 
+.return-requested {
+    background: #fef3c7;
+    color: #92400e;
+}
+
 .returned {
     background: #dbeafe;
     color: #1d4ed8;
@@ -734,7 +812,7 @@ body {
 
 .reject-button:hover {
 
-    background: #b91c1c !important;
+    background: #b91c1b !important;
 }
 
 
@@ -752,6 +830,40 @@ body {
 .return-button:hover {
 
     background: #1d4ed8 !important;
+}
+
+
+/* =====================================================
+   RETURN ACCEPT
+===================================================== */
+
+.return-accept-button {
+
+    background: #16a34a !important;
+
+    color: white !important;
+}
+
+.return-accept-button:hover {
+
+    background: #15803d !important;
+}
+
+
+/* =====================================================
+   RETURN REJECT
+===================================================== */
+
+.return-reject-button {
+
+    background: #dc2626 !important;
+
+    color: white !important;
+}
+
+.return-reject-button:hover {
+
+    background: #b91c1b !important;
 }
 
 
@@ -782,6 +894,49 @@ body {
     background: #dbeafe;
 
     color: #1d4ed8;
+}
+
+
+/* =====================================================
+   RETURN REQUEST BOX
+===================================================== */
+
+.return-request-box {
+
+    width: 100%;
+
+    background: #fffbeb;
+
+    border: 1px solid #fcd34d;
+
+    border-left: 5px solid #f59e0b;
+
+    border-radius: 10px;
+
+    padding: 18px;
+
+}
+
+.return-request-title {
+
+    margin: 0 0 8px;
+
+    color: #92400e;
+
+    font-size: 16px;
+
+}
+
+.return-request-text {
+
+    margin: 0 0 15px;
+
+    color: #78350f;
+
+    font-size: 13px;
+
+    line-height: 1.5;
+
 }
 
 
@@ -1169,8 +1324,21 @@ body {
                 $status =
                     $request['status'];
 
-                $status_class =
-                    strtolower($status);
+                /*
+                 * Convert "Return Requested"
+                 * into a valid CSS class.
+                 */
+
+                if ($status === 'Return Requested') {
+
+                    $status_class = 'return-requested';
+
+                } else {
+
+                    $status_class =
+                        strtolower($status);
+
+                }
 
                 ?>
 
@@ -1194,7 +1362,7 @@ body {
                         </div>
 
 
-                        <span class="status <?php echo $status_class; ?>">
+                        <span class="status <?php echo htmlspecialchars($status_class); ?>">
 
                             <?php
                             echo htmlspecialchars($status);
@@ -1390,6 +1558,27 @@ body {
 
                             <div class="button-group">
 
+                                <div class="finished"
+                                     style="background:#dcfce7; color:#166534;">
+
+                                    ✓ Item is currently borrowed
+
+                                </div>
+
+                            </div>
+
+
+                        <!-- =================================
+                             RETURN REQUESTED
+                        ================================== -->
+
+                        <?php elseif ($status === 'Return Requested'): ?>
+
+
+                            <div class="button-group">
+
+
+                                <!-- ACCEPT RETURN -->
 
                                 <form
                                     method="POST"
@@ -1407,12 +1596,42 @@ body {
 
                                     <button
                                         type="submit"
-                                        name="return_request"
-                                        class="action-button return-button"
-                                        onclick="return confirm('Has the borrower returned this item?');"
+                                        name="accept_return"
+                                        class="action-button return-accept-button"
+                                        onclick="return confirm('Has the borrower returned the item? Do you want to ACCEPT this return request?');"
                                     >
 
-                                        ↩ Mark as Returned
+                                        ✓ Accept Return
+
+                                    </button>
+
+                                </form>
+
+
+                                <!-- REJECT RETURN -->
+
+                                <form
+                                    method="POST"
+                                    style="margin:0;"
+                                >
+
+                                    <input
+                                        type="hidden"
+                                        name="request_id"
+                                        value="<?php
+                                        echo (int)$request['request_id'];
+                                        ?>"
+                                    >
+
+
+                                    <button
+                                        type="submit"
+                                        name="reject_return"
+                                        class="action-button return-reject-button"
+                                        onclick="return confirm('Do you want to REJECT this return request?');"
+                                    >
+
+                                        ✕ Reject Return
 
                                     </button>
 
