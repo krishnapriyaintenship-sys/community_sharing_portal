@@ -393,7 +393,7 @@ else
 ?>
 
 <img
-src="images/default.png"
+src="images/default.jpg"
 alt="Profile">
 
 <?php

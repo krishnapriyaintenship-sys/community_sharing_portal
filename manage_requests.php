@@ -1,42 +1,122 @@
 <?php
 session_start();
 
-require_once "includes/db.php";
+require_once __DIR__ . '/includes/db.php';
+require_once __DIR__ . '/includes/notification_mail.php';
 
-/* =====================================================
+
+/* =========================================================
    LOGIN CHECK
-===================================================== */
+========================================================= */
 
 if (!isset($_SESSION['user_id'])) {
-    header("Location: login.php");
-    exit();
+    header("Location: login.php?error=Please login first.");
+    exit;
 }
 
-$owner_id = (int)$_SESSION['user_id'];
+$owner_id = (int) $_SESSION['user_id'];
 
-$message = "";
-$message_type = "";
+$message = '';
+$message_type = '';
 
 
-/* =====================================================
-   ACCEPT REQUEST
-===================================================== */
+/* =========================================================
+   SAFE EMAIL FUNCTION
+========================================================= */
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST'
-    && isset($_POST['accept_request'])) {
+function safeEmailCall($functionName, array $arguments)
+{
+    try {
 
-    $request_id = (int)($_POST['request_id'] ?? 0);
+        if (function_exists($functionName)) {
+            call_user_func_array($functionName, $arguments);
+        }
 
-    $sql = "UPDATE borrow_requests
-            SET status = 'Approved',
-                approved_date = NOW()
-            WHERE request_id = ?
-              AND owner_id = ?
-              AND status = 'Pending'";
+        return true;
 
-    $stmt = $conn->prepare($sql);
+    } catch (Throwable $e) {
 
-    if ($stmt) {
+        /*
+         * Email error should not stop the database action.
+         */
+        error_log(
+            "Email error in {$functionName}: " .
+            $e->getMessage()
+        );
+
+        return false;
+    }
+}
+
+
+/* =========================================================
+   HANDLE POST ACTIONS
+========================================================= */
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+
+    $request_id = (int) ($_POST['request_id'] ?? 0);
+    $action = trim($_POST['action'] ?? '');
+    $owner_message = trim($_POST['owner_message'] ?? '');
+
+    if ($request_id <= 0) {
+
+        $message = "Invalid request ID.";
+        $message_type = "error";
+
+    } else {
+
+        /* =====================================================
+           GET REQUEST
+        ===================================================== */
+
+        $stmt = $conn->prepare("
+            SELECT
+                br.request_id,
+                br.item_id,
+                br.borrower_id,
+                br.owner_id,
+                br.borrow_date,
+                br.expected_return_date,
+                br.actual_return_date,
+                br.status,
+                br.owner_message,
+                br.request_date,
+                br.approved_date,
+                br.returned_date,
+
+                i.item_name,
+                i.description,
+                i.item_condition,
+                i.availability,
+                i.location,
+                i.image,
+
+                borrower.full_name AS borrower_name,
+                borrower.email AS borrower_email,
+                borrower.phone AS borrower_phone,
+                borrower.department AS borrower_department,
+                borrower.year_of_study AS borrower_year,
+
+                owner.full_name AS owner_name,
+                owner.email AS owner_email
+
+            FROM borrow_requests br
+
+            INNER JOIN items i
+                ON br.item_id = i.item_id
+
+            INNER JOIN users borrower
+                ON br.borrower_id = borrower.user_id
+
+            INNER JOIN users owner
+                ON br.owner_id = owner.user_id
+
+            WHERE br.request_id = ?
+              AND br.owner_id = ?
+
+            LIMIT 1
+        ");
 
         $stmt->bind_param(
             "ii",
@@ -44,1722 +124,1451 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
             $owner_id
         );
 
-        if ($stmt->execute() && $stmt->affected_rows > 0) {
+        $stmt->execute();
 
-            $message = "Request accepted successfully.";
-            $message_type = "success";
+        $result = $stmt->get_result();
 
-        } else {
-
-            $message = "Unable to accept this request.";
-            $message_type = "error";
-        }
+        $request = $result->fetch_assoc();
 
         $stmt->close();
 
-    } else {
 
-        $message = "Database error.";
-        $message_type = "error";
+        if (!$request) {
+
+            $message =
+                "Request not found or you are not authorized to manage it.";
+
+            $message_type = "error";
+
+        } else {
+
+
+            /* =================================================
+               APPROVE REQUEST
+            ================================================= */
+
+            if ($action === 'approve') {
+
+                if ($request['status'] !== 'Pending') {
+
+                    $message =
+                        "Only pending requests can be approved.";
+
+                    $message_type = "error";
+
+                } else {
+
+                    /*
+                     * Check whether another active request
+                     * already exists for this same item.
+                     *
+                     * We exclude the current request.
+                     */
+                    $stmt = $conn->prepare("
+                        SELECT request_id, status
+                        FROM borrow_requests
+                        WHERE item_id = ?
+                          AND request_id != ?
+                          AND status IN (
+                              'Approved',
+                              'Item Received',
+                              'Return Requested'
+                          )
+                        ORDER BY request_id DESC
+                        LIMIT 1
+                    ");
+
+                    $stmt->bind_param(
+                        "ii",
+                        $request['item_id'],
+                        $request_id
+                    );
+
+                    $stmt->execute();
+
+                    $active_result = $stmt->get_result();
+
+                    $active_request = $active_result->fetch_assoc();
+
+                    $stmt->close();
+
+
+                    if ($active_request) {
+
+                        /*
+                         * Another borrower is already using
+                         * this item.
+                         */
+                        $message =
+                            "This item already has an active borrow request. " .
+                            "This pending request cannot be approved.";
+
+                        $message_type = "error";
+
+                    } else {
+
+                        /*
+                         * Approve current request.
+                         *
+                         * We do NOT check availability here because
+                         * the screenshot shows that the availability
+                         * value can remain Borrowed even when the
+                         * current request is Pending.
+                         *
+                         * Instead, we checked for another ACTIVE
+                         * borrow request above.
+                         */
+
+                        $stmt = $conn->prepare("
+                            UPDATE borrow_requests
+                            SET
+                                status = 'Approved',
+                                approved_date = NOW(),
+                                owner_message = NULL
+                            WHERE request_id = ?
+                              AND owner_id = ?
+                              AND status = 'Pending'
+                        ");
+
+                        $stmt->bind_param(
+                            "ii",
+                            $request_id,
+                            $owner_id
+                        );
+
+                        $updated = $stmt->execute();
+
+                        $stmt->close();
+
+
+                        if ($updated) {
+
+                            /*
+                             * Mark item as Borrowed.
+                             */
+                            $stmt = $conn->prepare("
+                                UPDATE items
+                                SET availability = 'Borrowed'
+                                WHERE item_id = ?
+                            ");
+
+                            $stmt->bind_param(
+                                "i",
+                                $request['item_id']
+                            );
+
+                            $stmt->execute();
+
+                            $stmt->close();
+
+
+                            /*
+                             * SEND APPROVAL EMAIL
+             *
+                             * IMPORTANT:
+                             * Your function requires 5 arguments.
+                             */
+                            safeEmailCall(
+                                'sendBorrowApprovedEmail',
+                                [
+                                    $request['borrower_email'],
+                                    $request['borrower_name'],
+                                    $request['owner_name'],
+                                    $request['item_name'],
+                                    $request['expected_return_date']
+                                ]
+                            );
+
+
+                            $message =
+                                "Borrow request approved successfully.";
+
+                            $message_type = "success";
+
+                        } else {
+
+                            $message =
+                                "Unable to approve the request.";
+
+                            $message_type = "error";
+                        }
+                    }
+                }
+            }
+
+
+            /* =================================================
+               REJECT REQUEST
+            ================================================= */
+
+            elseif ($action === 'reject') {
+
+                if ($request['status'] !== 'Pending') {
+
+                    $message =
+                        "Only pending requests can be rejected.";
+
+                    $message_type = "error";
+
+                } else {
+
+                    $stmt = $conn->prepare("
+                        UPDATE borrow_requests
+                        SET
+                            status = 'Rejected',
+                            owner_message = ?
+                        WHERE request_id = ?
+                          AND owner_id = ?
+                          AND status = 'Pending'
+                    ");
+
+                    $stmt->bind_param(
+                        "sii",
+                        $owner_message,
+                        $request_id,
+                        $owner_id
+                    );
+
+                    $updated = $stmt->execute();
+
+                    $stmt->close();
+
+
+                    if ($updated) {
+
+                        safeEmailCall(
+                            'sendBorrowRejectedEmail',
+                            [
+                                $request['borrower_email'],
+                                $request['borrower_name'],
+                                $request['item_name'],
+                                $owner_message
+                            ]
+                        );
+
+                        $message =
+                            "Borrow request rejected successfully.";
+
+                        $message_type = "success";
+
+                    } else {
+
+                        $message =
+                            "Unable to reject the request.";
+
+                        $message_type = "error";
+                    }
+                }
+            }
+
+
+            /* =================================================
+               ACCEPT RETURN
+            ================================================= */
+
+            elseif ($action === 'accept_return') {
+
+                if ($request['status'] !== 'Return Requested') {
+
+                    $message =
+                        "This request does not have a pending return.";
+
+                    $message_type = "error";
+
+                } else {
+
+                    $stmt = $conn->prepare("
+                        UPDATE borrow_requests
+                        SET
+                            status = 'Returned',
+                            actual_return_date = CURDATE(),
+                            returned_date = NOW()
+                        WHERE request_id = ?
+                          AND owner_id = ?
+                          AND status = 'Return Requested'
+                    ");
+
+                    $stmt->bind_param(
+                        "ii",
+                        $request_id,
+                        $owner_id
+                    );
+
+                    $updated = $stmt->execute();
+
+                    $stmt->close();
+
+
+                    if ($updated) {
+
+                        /*
+                         * Make item available.
+                         */
+                        $stmt = $conn->prepare("
+                            UPDATE items
+                            SET availability = 'Available'
+                            WHERE item_id = ?
+                        ");
+
+                        $stmt->bind_param(
+                            "i",
+                            $request['item_id']
+                        );
+
+                        $stmt->execute();
+
+                        $stmt->close();
+
+
+                        safeEmailCall(
+                            'sendReturnAcceptedEmail',
+                            [
+                                $request['borrower_email'],
+                                $request['borrower_name'],
+                                $request['item_name']
+                            ]
+                        );
+
+
+                        $message =
+                            "Return accepted successfully. " .
+                            "The item is now available.";
+
+                        $message_type = "success";
+
+                    } else {
+
+                        $message =
+                            "Unable to accept the return.";
+
+                        $message_type = "error";
+                    }
+                }
+            }
+
+
+            /* =================================================
+               REJECT RETURN
+            ================================================= */
+
+            elseif ($action === 'reject_return') {
+
+                if ($request['status'] !== 'Return Requested') {
+
+                    $message =
+                        "This request does not have a pending return.";
+
+                    $message_type = "error";
+
+                } else {
+
+                    /*
+                     * Return request rejected.
+                     *
+                     * Item remains borrowed.
+                     */
+                    $stmt = $conn->prepare("
+                        UPDATE borrow_requests
+                        SET status = 'Item Received'
+                        WHERE request_id = ?
+                          AND owner_id = ?
+                          AND status = 'Return Requested'
+                    ");
+
+                    $stmt->bind_param(
+                        "ii",
+                        $request_id,
+                        $owner_id
+                    );
+
+                    $updated = $stmt->execute();
+
+                    $stmt->close();
+
+
+                    if ($updated) {
+
+                        $stmt = $conn->prepare("
+                            UPDATE items
+                            SET availability = 'Borrowed'
+                            WHERE item_id = ?
+                        ");
+
+                        $stmt->bind_param(
+                            "i",
+                            $request['item_id']
+                        );
+
+                        $stmt->execute();
+
+                        $stmt->close();
+
+
+                        safeEmailCall(
+                            'sendReturnRejectedEmail',
+                            [
+                                $request['borrower_email'],
+                                $request['borrower_name'],
+                                $request['item_name']
+                            ]
+                        );
+
+
+                        $message =
+                            "Return request rejected successfully.";
+
+                        $message_type = "success";
+
+                    } else {
+
+                        $message =
+                            "Unable to reject the return.";
+
+                        $message_type = "error";
+                    }
+                }
+            }
+
+
+            else {
+
+                $message = "Invalid action.";
+                $message_type = "error";
+            }
+        }
     }
 }
 
 
-/* =====================================================
-   REJECT REQUEST
-===================================================== */
+/* =========================================================
+   FETCH REQUESTS
+========================================================= */
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST'
-    && isset($_POST['reject_request'])) {
+$stmt = $conn->prepare("
+    SELECT
+        br.request_id,
+        br.item_id,
+        br.borrower_id,
+        br.borrow_date,
+        br.expected_return_date,
+        br.actual_return_date,
+        br.status,
+        br.owner_message,
+        br.request_date,
+        br.approved_date,
+        br.returned_date,
 
-    $request_id = (int)($_POST['request_id'] ?? 0);
+        i.item_name,
+        i.description,
+        i.item_condition,
+        i.availability,
+        i.location,
+        i.image,
 
-    $owner_message = trim(
-        $_POST['owner_message'] ?? ''
-    );
+        u.full_name AS borrower_name,
+        u.email AS borrower_email,
+        u.phone AS borrower_phone,
+        u.department AS borrower_department,
+        u.year_of_study AS borrower_year
 
-    if ($owner_message === '') {
-        $owner_message = "Request rejected by item owner.";
-    }
+    FROM borrow_requests br
 
-    $sql = "UPDATE borrow_requests
-            SET status = 'Rejected',
-                owner_message = ?
-            WHERE request_id = ?
-              AND owner_id = ?
-              AND status = 'Pending'";
+    INNER JOIN items i
+        ON br.item_id = i.item_id
 
-    $stmt = $conn->prepare($sql);
+    INNER JOIN users u
+        ON br.borrower_id = u.user_id
 
-    if ($stmt) {
+    WHERE br.owner_id = ?
 
-        $stmt->bind_param(
-            "sii",
-            $owner_message,
-            $request_id,
-            $owner_id
-        );
+    ORDER BY
+        CASE br.status
+            WHEN 'Pending' THEN 1
+            WHEN 'Return Requested' THEN 2
+            WHEN 'Approved' THEN 3
+            WHEN 'Item Received' THEN 4
+            WHEN 'Rejected' THEN 5
+            WHEN 'Returned' THEN 6
+            ELSE 7
+        END,
+        br.request_date DESC,
+        br.request_id DESC
+");
 
-        if ($stmt->execute() && $stmt->affected_rows > 0) {
+$stmt->bind_param("i", $owner_id);
 
-            $message = "Request rejected successfully.";
-            $message_type = "success";
+$stmt->execute();
 
-        } else {
-
-            $message = "Unable to reject this request.";
-            $message_type = "error";
-        }
-
-        $stmt->close();
-
-    } else {
-
-        $message = "Database error.";
-        $message_type = "error";
-    }
-}
-
-
-/* =====================================================
-   ACCEPT RETURN REQUEST
-===================================================== */
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST'
-    && isset($_POST['accept_return'])) {
-
-    $request_id = (int)($_POST['request_id'] ?? 0);
-
-    /*
-     * When owner accepts the return:
-     *
-     * Return Requested
-     *        ↓
-     * Returned
-     *
-     * actual_return_date = current date
-     * returned_date      = current date/time
-     */
-
-    $sql = "UPDATE borrow_requests
-            SET status = 'Returned',
-                actual_return_date = CURDATE(),
-                returned_date = NOW()
-            WHERE request_id = ?
-              AND owner_id = ?
-              AND status = 'Return Requested'";
-
-    $stmt = $conn->prepare($sql);
-
-    if ($stmt) {
-
-        $stmt->bind_param(
-            "ii",
-            $request_id,
-            $owner_id
-        );
-
-        if ($stmt->execute() && $stmt->affected_rows > 0) {
-
-            $message = "Return request accepted. Item marked as returned.";
-            $message_type = "success";
-
-        } else {
-
-            $message = "Unable to accept this return request.";
-            $message_type = "error";
-        }
-
-        $stmt->close();
-
-    } else {
-
-        $message = "Database error.";
-        $message_type = "error";
-    }
-}
-
-
-/* =====================================================
-   REJECT RETURN REQUEST
-===================================================== */
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST'
-    && isset($_POST['reject_return'])) {
-
-    $request_id = (int)($_POST['request_id'] ?? 0);
-
-    /*
-     * When owner rejects the return:
-     *
-     * Return Requested
-     *        ↓
-     * Approved
-     *
-     * The item remains borrowed.
-     */
-
-    $sql = "UPDATE borrow_requests
-            SET status = 'Approved'
-            WHERE request_id = ?
-              AND owner_id = ?
-              AND status = 'Return Requested'";
-
-    $stmt = $conn->prepare($sql);
-
-    if ($stmt) {
-
-        $stmt->bind_param(
-            "ii",
-            $request_id,
-            $owner_id
-        );
-
-        if ($stmt->execute() && $stmt->affected_rows > 0) {
-
-            $message = "Return request rejected. Item remains borrowed.";
-            $message_type = "success";
-
-        } else {
-
-            $message = "Unable to reject this return request.";
-            $message_type = "error";
-        }
-
-        $stmt->close();
-
-    } else {
-
-        $message = "Database error.";
-        $message_type = "error";
-    }
-}
-
-
-/* =====================================================
-   GET REQUESTS
-===================================================== */
-
-$sql = "SELECT
-            br.*,
-            u.full_name AS borrower_name,
-            u.email AS borrower_email,
-            u.phone AS borrower_phone
-        FROM borrow_requests br
-        LEFT JOIN users u
-            ON br.borrower_id = u.user_id
-        WHERE br.owner_id = ?
-        ORDER BY br.request_date DESC";
-
-$stmt = $conn->prepare($sql);
+$result = $stmt->get_result();
 
 $requests = [];
 
-if ($stmt) {
-
-    $stmt->bind_param(
-        "i",
-        $owner_id
-    );
-
-    $stmt->execute();
-
-    $result = $stmt->get_result();
-
-    while ($row = $result->fetch_assoc()) {
-        $requests[] = $row;
-    }
-
-    $stmt->close();
+while ($row = $result->fetch_assoc()) {
+    $requests[] = $row;
 }
 
+$stmt->close();
 
-/* =====================================================
+
+/* =========================================================
    COUNTS
-===================================================== */
+========================================================= */
 
-$total = count($requests);
+$pending_count = 0;
+$return_count = 0;
+$approved_count = 0;
+$received_count = 0;
 
-$pending = 0;
-$approved = 0;
-$rejected = 0;
-$return_requested = 0;
-$returned = 0;
+foreach ($requests as $row) {
 
-foreach ($requests as $request) {
-
-    if ($request['status'] === 'Pending') {
-        $pending++;
+    if ($row['status'] === 'Pending') {
+        $pending_count++;
     }
 
-    if ($request['status'] === 'Approved') {
-        $approved++;
+    if ($row['status'] === 'Return Requested') {
+        $return_count++;
     }
 
-    if ($request['status'] === 'Rejected') {
-        $rejected++;
+    if ($row['status'] === 'Approved') {
+        $approved_count++;
     }
 
-    if ($request['status'] === 'Return Requested') {
-        $return_requested++;
-    }
-
-    if ($request['status'] === 'Returned') {
-        $returned++;
+    if ($row['status'] === 'Item Received') {
+        $received_count++;
     }
 }
 
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 
 <head>
 
-<meta charset="UTF-8">
-
-<meta name="viewport"
-      content="width=device-width, initial-scale=1.0">
-
-<title>Manage Requests - CampusShare</title>
-
-
-<style>
-
-/* =====================================================
-   BASIC
-===================================================== */
-
-* {
-    box-sizing: border-box;
-}
-
-body {
-    margin: 0;
-    font-family: Arial, Helvetica, sans-serif;
-    background: #f4f6f9;
-    color: #1f2937;
-}
-
-
-/* =====================================================
-   SIDEBAR
-===================================================== */
-
-.sidebar {
-    position: fixed;
-    left: 0;
-    top: 0;
-
-    width: 240px;
-    height: 100vh;
-
-    background: #111827;
-
-    color: white;
-
-    padding: 25px 15px;
-}
-
-.logo {
-    text-align: center;
-    margin-bottom: 35px;
-}
-
-.logo-box {
-    width: 55px;
-    height: 55px;
-
-    margin: auto;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    background: #2563eb;
-
-    border-radius: 12px;
-
-    font-size: 20px;
-    font-weight: bold;
-}
-
-.logo h2 {
-    margin: 12px 0 4px;
-    font-size: 20px;
-}
-
-.logo p {
-    margin: 0;
-    font-size: 12px;
-    color: #9ca3af;
-}
-
-.menu-title {
-    margin: 25px 10px 10px;
-
-    font-size: 11px;
-
-    color: #9ca3af;
-
-    font-weight: bold;
-}
-
-.sidebar a {
-    display: block;
-
-    padding: 13px 14px;
-
-    margin-bottom: 5px;
-
-    color: #d1d5db;
-
-    text-decoration: none;
-
-    border-radius: 8px;
-
-    font-size: 14px;
-}
-
-.sidebar a:hover {
-    background: #1f2937;
-    color: white;
-}
-
-.sidebar a.active {
-    background: #2563eb;
-    color: white;
-}
-
-
-/* =====================================================
-   MAIN
-===================================================== */
-
-.main {
-    margin-left: 240px;
-
-    padding: 35px;
-}
-
-
-/* =====================================================
-   HEADER
-===================================================== */
-
-.page-title h1 {
-    margin: 0 0 8px;
-
-    font-size: 30px;
-}
-
-.page-title p {
-    margin: 0 0 25px;
-
-    color: #6b7280;
-}
-
-
-/* =====================================================
-   ALERT
-===================================================== */
-
-.alert {
-    padding: 14px 18px;
-
-    border-radius: 8px;
-
-    margin-bottom: 25px;
-
-    font-weight: bold;
-}
-
-.alert.success {
-    background: #dcfce7;
-    color: #166534;
-}
-
-.alert.error {
-    background: #fee2e2;
-    color: #991b1b;
-}
-
-
-/* =====================================================
-   STAT CARDS
-===================================================== */
-
-.stats {
-    display: grid;
-
-    grid-template-columns:
-        repeat(4, 1fr);
-
-    gap: 18px;
-
-    margin-bottom: 30px;
-}
-
-.stat {
-    background: white;
-
-    padding: 20px;
-
-    border-radius: 12px;
-
-    box-shadow:
-        0 2px 8px rgba(0,0,0,.06);
-}
-
-.stat-label {
-    display: block;
-
-    color: #6b7280;
-
-    font-size: 13px;
-
-    margin-bottom: 8px;
-}
-
-.stat-number {
-    font-size: 28px;
-
-    font-weight: bold;
-}
-
-
-/* =====================================================
-   REQUEST CONTAINER
-===================================================== */
-
-.request-container {
-    background: white;
-
-    padding: 25px;
-
-    border-radius: 14px;
-
-    box-shadow:
-        0 2px 10px rgba(0,0,0,.06);
-}
-
-.request-container h2 {
-    margin-top: 0;
-}
-
-
-/* =====================================================
-   REQUEST CARD
-===================================================== */
-
-.request-card {
-    border: 1px solid #e5e7eb;
-
-    border-radius: 12px;
-
-    padding: 22px;
-
-    margin-top: 20px;
-
-    background: white;
-}
-
-.request-card:hover {
-    box-shadow:
-        0 5px 18px rgba(0,0,0,.08);
-}
-
-
-/* =====================================================
-   CARD TOP
-===================================================== */
-
-.request-top {
-    display: flex;
-
-    justify-content: space-between;
-
-    align-items: center;
-
-    margin-bottom: 18px;
-}
-
-.request-id {
-    font-weight: bold;
-
-    font-size: 16px;
-}
-
-
-/* =====================================================
-   STATUS
-===================================================== */
-
-.status {
-    display: inline-block;
-
-    padding: 7px 14px;
-
-    border-radius: 20px;
-
-    font-size: 12px;
-
-    font-weight: bold;
-}
-
-.pending {
-    background: #fff7ed;
-    color: #c2410c;
-}
-
-.approved {
-    background: #dcfce7;
-    color: #166534;
-}
-
-.rejected {
-    background: #fee2e2;
-    color: #991b1b;
-}
-
-.return-requested {
-    background: #fef3c7;
-    color: #92400e;
-}
-
-.returned {
-    background: #dbeafe;
-    color: #1d4ed8;
-}
-
-
-/* =====================================================
-   DETAILS
-===================================================== */
-
-.request-details {
-    display: grid;
-
-    grid-template-columns:
-        repeat(2, 1fr);
-
-    gap: 15px;
-
-    margin-bottom: 20px;
-}
-
-.detail {
-    background: #f8fafc;
-
-    padding: 14px;
-
-    border-radius: 8px;
-}
-
-.detail-label {
-    display: block;
-
-    font-size: 11px;
-
-    color: #6b7280;
-
-    text-transform: uppercase;
-
-    margin-bottom: 5px;
-}
-
-.detail-value {
-    font-size: 14px;
-
-    font-weight: 600;
-}
-
-
-/* =====================================================
-   IMPORTANT BUTTON AREA
-===================================================== */
-
-.request-actions {
-
-    display: flex;
-
-    justify-content: space-between;
-
-    align-items: center;
-
-    gap: 15px;
-
-    padding-top: 18px;
-
-    border-top: 1px solid #e5e7eb;
-
-}
-
-
-/* =====================================================
-   VIEW BORROWER BUTTON
-===================================================== */
-
-.view-btn {
-
-    display: inline-flex;
-
-    align-items: center;
-
-    justify-content: center;
-
-    padding: 12px 18px;
-
-    min-height: 44px;
-
-    background: #eff6ff;
-
-    border: 1px solid #93c5fd;
-
-    color: #1d4ed8;
-
-    border-radius: 8px;
-
-    text-decoration: none;
-
-    font-size: 13px;
-
-    font-weight: bold;
-
-    white-space: nowrap;
-}
-
-.view-btn:hover {
-    background: #dbeafe;
-}
-
-
-/* =====================================================
-   BUTTON GROUP
-===================================================== */
-
-.button-group {
-
-    display: flex;
-
-    gap: 10px;
-
-    align-items: center;
-}
-
-
-/* =====================================================
-   ACTION BUTTON
-===================================================== */
-
-.action-button {
-
-    display: inline-flex;
-
-    align-items: center;
-
-    justify-content: center;
-
-    min-height: 44px;
-
-    padding: 12px 20px;
-
-    border: none;
-
-    border-radius: 8px;
-
-    color: white !important;
-
-    font-size: 13px;
-
-    font-weight: bold;
-
-    cursor: pointer;
-
-    white-space: nowrap;
-
-    text-decoration: none;
-}
-
-
-/* =====================================================
-   ACCEPT
-===================================================== */
-
-.accept-button {
-
-    background: #16a34a !important;
-
-    color: white !important;
-}
-
-.accept-button:hover {
-
-    background: #15803d !important;
-}
-
-
-/* =====================================================
-   REJECT
-===================================================== */
-
-.reject-button {
-
-    background: #dc2626 !important;
-
-    color: white !important;
-}
-
-.reject-button:hover {
-
-    background: #b91c1b !important;
-}
-
-
-/* =====================================================
-   RETURN
-===================================================== */
-
-.return-button {
-
-    background: #2563eb !important;
-
-    color: white !important;
-}
-
-.return-button:hover {
-
-    background: #1d4ed8 !important;
-}
-
-
-/* =====================================================
-   RETURN ACCEPT
-===================================================== */
-
-.return-accept-button {
-
-    background: #16a34a !important;
-
-    color: white !important;
-}
-
-.return-accept-button:hover {
-
-    background: #15803d !important;
-}
-
-
-/* =====================================================
-   RETURN REJECT
-===================================================== */
-
-.return-reject-button {
-
-    background: #dc2626 !important;
-
-    color: white !important;
-}
-
-.return-reject-button:hover {
-
-    background: #b91c1b !important;
-}
-
-
-/* =====================================================
-   FINISHED STATUS
-===================================================== */
-
-.finished {
-
-    padding: 12px 16px;
-
-    border-radius: 8px;
-
-    font-size: 13px;
-
-    font-weight: bold;
-}
-
-.finished-rejected {
-
-    background: #fee2e2;
-
-    color: #991b1b;
-}
-
-.finished-returned {
-
-    background: #dbeafe;
-
-    color: #1d4ed8;
-}
-
-
-/* =====================================================
-   RETURN REQUEST BOX
-===================================================== */
-
-.return-request-box {
-
-    width: 100%;
-
-    background: #fffbeb;
-
-    border: 1px solid #fcd34d;
-
-    border-left: 5px solid #f59e0b;
-
-    border-radius: 10px;
-
-    padding: 18px;
-
-}
-
-.return-request-title {
-
-    margin: 0 0 8px;
-
-    color: #92400e;
-
-    font-size: 16px;
-
-}
-
-.return-request-text {
-
-    margin: 0 0 15px;
-
-    color: #78350f;
-
-    font-size: 13px;
-
-    line-height: 1.5;
-
-}
-
-
-/* =====================================================
-   EMPTY
-===================================================== */
-
-.empty {
-
-    text-align: center;
-
-    padding: 60px 20px;
-
-    color: #6b7280;
-}
-
-
-/* =====================================================
-   MODAL
-===================================================== */
-
-.modal {
-
-    display: none;
-
-    position: fixed;
-
-    inset: 0;
-
-    background: rgba(0,0,0,.55);
-
-    z-index: 9999;
-
-    align-items: center;
-
-    justify-content: center;
-}
-
-.modal-box {
-
-    width: 90%;
-
-    max-width: 450px;
-
-    background: white;
-
-    border-radius: 12px;
-
-    padding: 25px;
-}
-
-.modal-box h3 {
-    margin-top: 0;
-}
-
-.modal-box textarea {
-
-    width: 100%;
-
-    min-height: 110px;
-
-    padding: 12px;
-
-    border: 1px solid #d1d5db;
-
-    border-radius: 8px;
-
-    resize: vertical;
-
-    outline: none;
-
-    margin: 10px 0 18px;
-}
-
-.modal-buttons {
-
-    display: flex;
-
-    justify-content: flex-end;
-
-    gap: 10px;
-}
-
-.cancel-button {
-
-    padding: 11px 18px;
-
-    border: 1px solid #d1d5db;
-
-    background: white;
-
-    border-radius: 8px;
-
-    cursor: pointer;
-}
-
-.confirm-reject {
-
-    padding: 11px 18px;
-
-    border: none;
-
-    background: #dc2626;
-
-    color: white;
-
-    border-radius: 8px;
-
-    font-weight: bold;
-
-    cursor: pointer;
-}
-
-
-/* =====================================================
-   MOBILE
-===================================================== */
-
-@media (max-width: 850px) {
-
-    .sidebar {
-        position: relative;
-
-        width: 100%;
-
-        height: auto;
-    }
-
-    .main {
-        margin-left: 0;
-
-        padding: 20px;
-    }
-
-    .stats {
-        grid-template-columns:
-            repeat(2, 1fr);
-    }
-
-    .request-actions {
-        flex-direction: column;
-
-        align-items: stretch;
-    }
-
-    .view-btn {
-        width: 100%;
-    }
-
-    .button-group {
-        width: 100%;
-    }
-
-    .action-button {
-        flex: 1;
-    }
-}
-
-
-@media (max-width: 500px) {
-
-    .stats {
-        grid-template-columns: 1fr;
-    }
-
-    .request-details {
-        grid-template-columns: 1fr;
-    }
-
-    .button-group {
-        flex-direction: column;
-    }
-
-    .action-button {
-        width: 100%;
-    }
-}
-
-</style>
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Manage Requests - Community Share</title>
+
+    <link
+        rel="stylesheet"
+        href="css/manage_requests.css"
+    >
+
+    <link
+        rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
+    >
 
 </head>
-
 
 <body>
 
 
-<!-- =====================================================
-     SIDEBAR
-===================================================== -->
-
-<div class="sidebar">
-
-    <div class="logo">
-
-        <div class="logo-box">
-            CS
-        </div>
-
-        <h2>
-            CampusShare
-        </h2>
-
-        <p>
-            Community Sharing
-        </p>
-
-    </div>
+<div class="page-wrapper">
 
 
-    <div class="menu-title">
-        MAIN MENU
-    </div>
+    <!-- =====================================================
+         SIDEBAR
+    ====================================================== -->
 
+    <aside class="sidebar">
 
-    <a href="dashboard.php">
-        Dashboard
-    </a>
+        <div class="sidebar-logo">
 
-    <a href="add_item.php">
-        Add Item
-    </a>
+            <div class="logo-icon">
+                <i class="fa-solid fa-share-nodes"></i>
+            </div>
 
-    <a href="my_items.php">
-        My Items
-    </a>
-
-    <a href="browse_items.php">
-        Browse Items
-    </a>
-
-    <a href="manage_requests.php"
-       class="active">
-
-        Manage Requests
-
-    </a>
-
-
-    <div class="menu-title">
-        ACCOUNT
-    </div>
-
-
-    <a href="notifications.php">
-        Notifications
-    </a>
-
-    <a href="profile.php">
-        Profile
-    </a>
-
-    <a href="logout.php">
-        Logout
-    </a>
-
-</div>
-
-
-<!-- =====================================================
-     MAIN CONTENT
-===================================================== -->
-
-<div class="main">
-
-
-    <div class="page-title">
-
-        <h1>
-            Manage Requests
-        </h1>
-
-        <p>
-            Accept or reject borrowing requests from other users.
-        </p>
-
-    </div>
-
-
-    <!-- MESSAGE -->
-
-    <?php if ($message !== ""): ?>
-
-        <div class="alert <?php echo htmlspecialchars($message_type); ?>">
-
-            <?php echo htmlspecialchars($message); ?>
-
-        </div>
-
-    <?php endif; ?>
-
-
-    <!-- =================================================
-         STATISTICS
-    ================================================== -->
-
-    <div class="stats">
-
-        <div class="stat">
-
-            <span class="stat-label">
-                Total Requests
-            </span>
-
-            <span class="stat-number">
-                <?php echo $total; ?>
-            </span>
+            <div>
+                <h2>Community Share</h2>
+                <span>Item Sharing Portal</span>
+            </div>
 
         </div>
 
 
-        <div class="stat">
+        <nav class="sidebar-nav">
 
-            <span class="stat-label">
-                Pending
-            </span>
+            <a href="dashboard.php">
+                <i class="fa-solid fa-house"></i>
+                <span>Dashboard</span>
+            </a>
 
-            <span class="stat-number">
-                <?php echo $pending; ?>
-            </span>
+            <a href="browse_items.php">
+                <i class="fa-solid fa-box-open"></i>
+                <span>Browse Items</span>
+            </a>
+
+            <a href="my_items.php">
+                <i class="fa-solid fa-box"></i>
+                <span>My Items</span>
+            </a>
+
+            <a href="add_item.php">
+                <i class="fa-solid fa-plus"></i>
+                <span>Add Item</span>
+            </a>
+
+            <a href="my_borrow_requests.php">
+                <i class="fa-solid fa-hand-holding"></i>
+                <span>My Borrow Requests</span>
+            </a>
+
+            <a
+                href="manage_requests.php"
+                class="active"
+            >
+                <i class="fa-solid fa-list-check"></i>
+                <span>Manage Requests</span>
+            </a>
+
+            <a href="contact.php">
+                <i class="fa-solid fa-envelope"></i>
+                <span>Contact</span>
+            </a>
+
+        </nav>
+
+
+        <div class="sidebar-bottom">
+
+            <a href="logout.php" class="logout-link">
+
+                <i class="fa-solid fa-right-from-bracket"></i>
+
+                <span>Logout</span>
+
+            </a>
 
         </div>
 
-
-        <div class="stat">
-
-            <span class="stat-label">
-                Approved
-            </span>
-
-            <span class="stat-number">
-                <?php echo $approved; ?>
-            </span>
-
-        </div>
+    </aside>
 
 
-        <div class="stat">
+    <!-- =====================================================
+         MAIN CONTENT
+    ====================================================== -->
 
-            <span class="stat-label">
-                Returned
-            </span>
-
-            <span class="stat-number">
-                <?php echo $returned; ?>
-            </span>
-
-        </div>
-
-    </div>
+    <main class="main-content">
 
 
-    <!-- =================================================
-         REQUESTS
-    ================================================== -->
+        <!-- HEADER -->
 
-    <div class="request-container">
+        <header class="top-header">
 
-        <h2>
-            Borrow Requests
-        </h2>
+            <div>
 
-
-        <?php if (empty($requests)): ?>
-
-            <div class="empty">
-
-                <h3>
-                    No Requests Found
-                </h3>
+                <h1>
+                    <i class="fa-solid fa-list-check"></i>
+                    Manage Requests
+                </h1>
 
                 <p>
-                    No one has requested your items yet.
+                    View and manage requests for your items.
                 </p>
 
             </div>
 
-        <?php else: ?>
+
+            <div class="user-info">
+
+                <div class="user-avatar">
+
+                    <?php
+                    echo strtoupper(
+                        substr(
+                            $_SESSION['full_name'] ?? 'U',
+                            0,
+                            1
+                        )
+                    );
+                    ?>
+
+                </div>
+
+                <div>
+
+                    <strong>
+                        <?php
+                        echo htmlspecialchars(
+                            $_SESSION['full_name'] ?? 'User'
+                        );
+                        ?>
+                    </strong>
+
+                    <small>Item Owner</small>
+
+                </div>
+
+            </div>
+
+        </header>
 
 
-            <?php foreach ($requests as $request): ?>
+        <!-- =====================================================
+             ALERT
+        ====================================================== -->
 
+        <?php if (!empty($message)): ?>
 
+            <div
+                class="alert
                 <?php
+                echo $message_type === 'success'
+                    ? 'alert-success'
+                    : 'alert-error';
+                ?>"
+            >
 
-                $status =
-                    $request['status'];
+                <i
+                    class="fa-solid
+                    <?php
+                    echo $message_type === 'success'
+                        ? 'fa-circle-check'
+                        : 'fa-circle-exclamation';
+                    ?>"
+                ></i>
 
-                /*
-                 * Convert "Return Requested"
-                 * into a valid CSS class.
-                 */
+                <div>
+                    <?php
+                    echo nl2br(
+                        htmlspecialchars($message)
+                    );
+                    ?>
+                </div>
 
-                if ($status === 'Return Requested') {
+                <button
+                    type="button"
+                    class="close-alert"
+                    onclick="this.parentElement.remove();"
+                >
+                    &times;
+                </button>
 
-                    $status_class = 'return-requested';
+            </div>
 
-                } else {
-
-                    $status_class =
-                        strtolower($status);
-
-                }
-
-                ?>
-
-
-                <div class="request-card">
-
-
-                    <!-- =================================
-                         TOP
-                    ================================== -->
-
-                    <div class="request-top">
-
-                        <div class="request-id">
-
-                            Request #
-                            <?php
-                            echo (int)$request['request_id'];
-                            ?>
-
-                        </div>
+        <?php endif; ?>
 
 
-                        <span class="status <?php echo htmlspecialchars($status_class); ?>">
+        <!-- =====================================================
+             STATISTICS
+        ====================================================== -->
 
-                            <?php
-                            echo htmlspecialchars($status);
-                            ?>
+        <section class="stats-grid">
 
-                        </span>
+            <div class="stat-card">
+
+                <div class="stat-icon pending-icon">
+                    <i class="fa-solid fa-clock"></i>
+                </div>
+
+                <div>
+                    <span>Pending</span>
+                    <strong>
+                        <?php echo $pending_count; ?>
+                    </strong>
+                </div>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <div class="stat-icon return-icon">
+                    <i class="fa-solid fa-rotate-left"></i>
+                </div>
+
+                <div>
+                    <span>Return Requests</span>
+                    <strong>
+                        <?php echo $return_count; ?>
+                    </strong>
+                </div>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <div class="stat-icon approved-icon">
+                    <i class="fa-solid fa-check"></i>
+                </div>
+
+                <div>
+                    <span>Approved</span>
+                    <strong>
+                        <?php echo $approved_count; ?>
+                    </strong>
+                </div>
+
+            </div>
+
+
+            <div class="stat-card">
+
+                <div class="stat-icon received-icon">
+                    <i class="fa-solid fa-box-open"></i>
+                </div>
+
+                <div>
+                    <span>Item Received</span>
+                    <strong>
+                        <?php echo $received_count; ?>
+                    </strong>
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- =====================================================
+             REQUEST SECTION
+        ====================================================== -->
+
+        <section class="requests-section">
+
+
+            <div class="section-header">
+
+                <div>
+
+                    <h2>Borrow & Return Requests</h2>
+
+                    <p>
+                        Click "View Details" to see complete request
+                        information and available actions.
+                    </p>
+
+                </div>
+
+
+                <div class="total-count">
+
+                    <i class="fa-solid fa-list"></i>
+
+                    <?php echo count($requests); ?>
+
+                    Total Requests
+
+                </div>
+
+            </div>
+
+
+            <?php if (empty($requests)): ?>
+
+
+                <!-- EMPTY -->
+
+                <div class="empty-state">
+
+                    <div class="empty-icon">
+
+                        <i class="fa-solid fa-inbox"></i>
 
                     </div>
 
+                    <h3>No Requests Yet</h3>
 
-                    <!-- =================================
-                         DETAILS
-                    ================================== -->
+                    <p>
+                        You don't have any borrow or return requests
+                        for your items.
+                    </p>
 
-                    <div class="request-details">
-
-
-                        <div class="detail">
-
-                            <span class="detail-label">
-                                Borrower
-                            </span>
-
-                            <span class="detail-value">
-
-                                <?php
-                                echo htmlspecialchars(
-                                    $request['borrower_name']
-                                    ?? 'Unknown'
-                                );
-                                ?>
-
-                            </span>
-
-                        </div>
+                </div>
 
 
-                        <div class="detail">
-
-                            <span class="detail-label">
-                                Email
-                            </span>
-
-                            <span class="detail-value">
-
-                                <?php
-                                echo htmlspecialchars(
-                                    $request['borrower_email']
-                                    ?? 'Not available'
-                                );
-                                ?>
-
-                            </span>
-
-                        </div>
+            <?php else: ?>
 
 
-                        <div class="detail">
-
-                            <span class="detail-label">
-                                Item ID
-                            </span>
-
-                            <span class="detail-value">
-
-                                #<?php
-                                echo (int)$request['item_id'];
-                                ?>
-
-                            </span>
-
-                        </div>
+                <div class="requests-list">
 
 
-                        <div class="detail">
-
-                            <span class="detail-label">
-                                Request Date
-                            </span>
-
-                            <span class="detail-value">
-
-                                <?php
-
-                                if (!empty(
-                                    $request['request_date']
-                                )) {
-
-                                    echo date(
-                                        "d M Y",
-                                        strtotime(
-                                            $request['request_date']
-                                        )
-                                    );
-
-                                } else {
-
-                                    echo "—";
-
-                                }
-
-                                ?>
-
-                            </span>
-
-                        </div>
+                    <?php foreach ($requests as $row): ?>
 
 
-                    </div>
+                        <?php
+
+                        $status_class = 'status-default';
+                        $status_icon = 'fa-circle-info';
+
+                        switch ($row['status']) {
+
+                            case 'Pending':
+                                $status_class = 'status-pending';
+                                $status_icon = 'fa-clock';
+                                break;
+
+                            case 'Approved':
+                                $status_class = 'status-approved';
+                                $status_icon = 'fa-check';
+                                break;
+
+                            case 'Item Received':
+                                $status_class = 'status-received';
+                                $status_icon = 'fa-box-open';
+                                break;
+
+                            case 'Return Requested':
+                                $status_class = 'status-return';
+                                $status_icon = 'fa-rotate-left';
+                                break;
+
+                            case 'Returned':
+                                $status_class = 'status-returned';
+                                $status_icon = 'fa-circle-check';
+                                break;
+
+                            case 'Rejected':
+                                $status_class = 'status-rejected';
+                                $status_icon = 'fa-xmark';
+                                break;
+                        }
+
+                        ?>
 
 
-                    <!-- =================================
-                         BUTTON AREA
-                    ================================== -->
+                        <!-- =================================================
+                             REQUEST CARD
+                        ================================================== -->
 
-                    <div class="request-actions">
-
-
-                        <!-- VIEW BORROWER -->
-
-                        <a
-                            href="borrower_details.php?request_id=<?php echo (int)$request['request_id']; ?>"
-                            class="view-btn"
-                        >
-
-                            👤 View Borrower
-
-                        </a>
+                        <article class="request-card">
 
 
-                        <!-- =================================
-                             PENDING BUTTONS
-                        ================================== -->
-
-                        <?php if ($status === 'Pending'): ?>
+                            <div class="card-top">
 
 
-                            <div class="button-group">
+                                <div class="item-mini">
+
+                                    <div class="item-mini-image">
+
+                                        <?php if (!empty($row['image'])): ?>
+
+                                            <img
+                                                src="uploads/items/<?php
+                                                echo htmlspecialchars(
+                                                    $row['image']
+                                                );
+                                                ?>"
+                                                alt=""
+                                            >
+
+                                        <?php else: ?>
+
+                                            <div class="no-image">
+                                                <i class="fa-solid fa-image"></i>
+                                            </div>
+
+                                        <?php endif; ?>
+
+                                    </div>
 
 
-                                <!-- ACCEPT -->
+                                    <div>
 
-                                <form
-                                    method="POST"
-                                    style="margin:0;"
+                                        <h3>
+                                            <?php
+                                            echo htmlspecialchars(
+                                                $row['item_name']
+                                            );
+                                            ?>
+                                        </h3>
+
+                                        <p>
+                                            Request #<?php
+                                            echo (int) $row['request_id'];
+                                            ?>
+                                        </p>
+
+                                    </div>
+
+                                </div>
+
+
+                                <span
+                                    class="status-badge <?php
+                                    echo $status_class;
+                                    ?>"
                                 >
 
-                                    <input
-                                        type="hidden"
-                                        name="request_id"
-                                        value="<?php
-                                        echo (int)$request['request_id'];
+                                    <i
+                                        class="fa-solid <?php
+                                        echo $status_icon;
                                         ?>"
-                                    >
+                                    ></i>
 
+                                    <?php
+                                    echo htmlspecialchars(
+                                        $row['status']
+                                    );
+                                    ?>
 
-                                    <button
-                                        type="submit"
-                                        name="accept_request"
-                                        class="action-button accept-button"
-                                        onclick="return confirm('Do you want to ACCEPT this borrow request?');"
-                                    >
-
-                                        ✓ Accept
-
-                                    </button>
-
-                                </form>
-
-
-                                <!-- REJECT -->
-
-                                <button
-                                    type="button"
-                                    class="action-button reject-button"
-                                    onclick="openRejectModal(<?php echo (int)$request['request_id']; ?>)"
-                                >
-
-                                    ✕ Reject
-
-                                </button>
-
+                                </span>
 
                             </div>
 
 
-                        <!-- =================================
-                             APPROVED
-                        ================================== -->
+                            <!-- =================================================
+                                 SHORT DETAILS
+                            ================================================== -->
 
-                        <?php elseif ($status === 'Approved'): ?>
+                            <div class="short-details">
 
 
-                            <div class="button-group">
+                                <div class="short-detail">
 
-                                <div class="finished"
-                                     style="background:#dcfce7; color:#166534;">
+                                    <span>
+                                        <i class="fa-solid fa-user"></i>
+                                        Borrower
+                                    </span>
 
-                                    ✓ Item is currently borrowed
+                                    <strong>
+                                        <?php
+                                        echo htmlspecialchars(
+                                            $row['borrower_name']
+                                        );
+                                        ?>
+                                    </strong>
+
+                                </div>
+
+
+                                <div class="short-detail">
+
+                                    <span>
+                                        <i class="fa-solid fa-calendar"></i>
+                                        Borrow Date
+                                    </span>
+
+                                    <strong>
+                                        <?php
+                                        echo !empty(
+                                            $row['borrow_date']
+                                        )
+                                            ? date(
+                                                'd M Y',
+                                                strtotime(
+                                                    $row['borrow_date']
+                                                )
+                                            )
+                                            : '-';
+                                        ?>
+                                    </strong>
+
+                                </div>
+
+
+                                <div class="short-detail">
+
+                                    <span>
+                                        <i class="fa-solid fa-calendar-check"></i>
+                                        Expected Return
+                                    </span>
+
+                                    <strong>
+                                        <?php
+                                        echo !empty(
+                                            $row['expected_return_date']
+                                        )
+                                            ? date(
+                                                'd M Y',
+                                                strtotime(
+                                                    $row['expected_return_date']
+                                                )
+                                            )
+                                            : '-';
+                                        ?>
+                                    </strong>
+
+                                </div>
+
+
+                                <div class="short-detail">
+
+                                    <span>
+                                        <i class="fa-solid fa-location-dot"></i>
+                                        Location
+                                    </span>
+
+                                    <strong>
+                                        <?php
+                                        echo htmlspecialchars(
+                                            $row['location'] ?: 'Not specified'
+                                        );
+                                        ?>
+                                    </strong>
 
                                 </div>
 
                             </div>
 
 
-                        <!-- =================================
-                             RETURN REQUESTED
-                        ================================== -->
+                            <!-- =================================================
+                                 VIEW DETAILS BUTTON
+                            ================================================== -->
 
-                        <?php elseif ($status === 'Return Requested'): ?>
+                            <div class="card-footer">
 
-
-                            <div class="button-group">
-
-
-                                <!-- ACCEPT RETURN -->
-
-                                <form
-                                    method="POST"
-                                    style="margin:0;"
+                                <button
+                                    type="button"
+                                    class="view-details-btn"
+                                    onclick="openDetailsModal(
+                                        <?php
+                                        echo (int) $row['request_id'];
+                                        ?>
+                                    )"
                                 >
 
-                                    <input
-                                        type="hidden"
-                                        name="request_id"
-                                        value="<?php
-                                        echo (int)$request['request_id'];
-                                        ?>"
-                                    >
+                                    <i class="fa-solid fa-eye"></i>
 
+                                    View Details
 
-                                    <button
-                                        type="submit"
-                                        name="accept_return"
-                                        class="action-button return-accept-button"
-                                        onclick="return confirm('Has the borrower returned the item? Do you want to ACCEPT this return request?');"
-                                    >
-
-                                        ✓ Accept Return
-
-                                    </button>
-
-                                </form>
-
-
-                                <!-- REJECT RETURN -->
-
-                                <form
-                                    method="POST"
-                                    style="margin:0;"
-                                >
-
-                                    <input
-                                        type="hidden"
-                                        name="request_id"
-                                        value="<?php
-                                        echo (int)$request['request_id'];
-                                        ?>"
-                                    >
-
-
-                                    <button
-                                        type="submit"
-                                        name="reject_return"
-                                        class="action-button return-reject-button"
-                                        onclick="return confirm('Do you want to REJECT this return request?');"
-                                    >
-
-                                        ✕ Reject Return
-
-                                    </button>
-
-                                </form>
-
+                                </button>
 
                             </div>
 
 
-                        <!-- =================================
-                             REJECTED
-                        ================================== -->
-
-                        <?php elseif ($status === 'Rejected'): ?>
+                        </article>
 
 
-                            <div class="finished finished-rejected">
+                        <!-- =================================================
+                             HIDDEN DETAILS DATA
+                        ================================================== -->
 
-                                ✕ Request Rejected
+                        <div
+                            id="request-data-<?php
+                            echo (int) $row['request_id'];
+                            ?>"
+                            class="request-data"
+                            data-request-id="<?php
+                            echo (int) $row['request_id'];
+                            ?>"
+                            data-status="<?php
+                            echo htmlspecialchars(
+                                $row['status'],
+                                ENT_QUOTES
+                            );
+                            ?>"
+                            data-item="<?php
+                            echo htmlspecialchars(
+                                $row['item_name'],
+                                ENT_QUOTES
+                            );
+                            ?>"
+                            data-description="<?php
+                            echo htmlspecialchars(
+                                $row['description'] ?? '',
+                                ENT_QUOTES
+                            );
+                            ?>"
+                            data-condition="<?php
+                            echo htmlspecialchars(
+                                $row['item_condition'] ?? '',
+                                ENT_QUOTES
+                            );
+                            ?>"
+                            data-availability="<?php
+                            echo htmlspecialchars(
+                                $row['availability'] ?? '',
+                                ENT_QUOTES
+                            );
+                            ?>"
+                            data-location="<?php
+                            echo htmlspecialchars(
+                                $row['location'] ?? '',
+                                ENT_QUOTES
+                            );
+                            ?>"
+                            data-borrower="<?php
+                            echo htmlspecialchars(
+                                $row['borrower_name'],
+                                ENT_QUOTES
+                            );
+                            ?>"
+                            data-email="<?php
+                            echo htmlspecialchars(
+                                $row['borrower_email'],
+                                ENT_QUOTES
+                            );
+                            ?>"
+                            data-phone="<?php
+                            echo htmlspecialchars(
+                                $row['borrower_phone'] ?? '',
+                                ENT_QUOTES
+                            );
+                            ?>"
+                            data-department="<?php
+                            echo htmlspecialchars(
+                                $row['borrower_department'] ?? '',
+                                ENT_QUOTES
+                            );
+                            ?>"
+                            data-year="<?php
+                            echo htmlspecialchars(
+                                $row['borrower_year'] ?? '',
+                                ENT_QUOTES
+                            );
+                            ?>"
+                            data-borrow-date="<?php
+                            echo htmlspecialchars(
+                                $row['borrow_date'] ?? '',
+                                ENT_QUOTES
+                            );
+                            ?>"
+                            data-return-date="<?php
+                            echo htmlspecialchars(
+                                $row['expected_return_date'] ?? '',
+                                ENT_QUOTES
+                            );
+                            ?>"
+                            data-actual-return="<?php
+                            echo htmlspecialchars(
+                                $row['actual_return_date'] ?? '',
+                                ENT_QUOTES
+                            );
+                            ?>"
+                            data-owner-message="<?php
+                            echo htmlspecialchars(
+                                $row['owner_message'] ?? '',
+                                ENT_QUOTES
+                            );
+                            ?>"
+                            data-request-date="<?php
+                            echo htmlspecialchars(
+                                $row['request_date'] ?? '',
+                                ENT_QUOTES
+                            );
+                            ?>"
+                        ></div>
 
-                            </div>
 
-
-                        <!-- =================================
-                             RETURNED
-                        ================================== -->
-
-                        <?php elseif ($status === 'Returned'): ?>
-
-
-                            <div class="finished finished-returned">
-
-                                ✓ Item Returned
-
-                            </div>
-
-
-                        <?php endif; ?>
-
-
-                    </div>
+                    <?php endforeach; ?>
 
 
                 </div>
 
 
-            <?php endforeach; ?>
+            <?php endif; ?>
 
 
-        <?php endif; ?>
+        </section>
 
 
-    </div>
-
+    </main>
 
 </div>
 
 
-<!-- =====================================================
-     REJECT MODAL
-===================================================== -->
+<!-- =========================================================
+     DETAILS MODAL
+========================================================= -->
 
 <div
+    id="detailsModal"
     class="modal"
-    id="rejectModal"
 >
 
 
-    <div class="modal-box">
+    <div class="modal-content details-modal">
 
 
-        <h3>
-            Reject Request
-        </h3>
+        <!-- MODAL HEADER -->
 
+        <div class="modal-header">
 
-        <p>
-            Enter a reason for rejecting this request.
-        </p>
+            <div>
 
+                <span class="modal-small-title">
+                    Borrow Request
+                </span>
 
-        <form method="POST">
-
-
-            <input
-                type="hidden"
-                name="request_id"
-                id="rejectRequestId"
-            >
-
-
-            <textarea
-                name="owner_message"
-                placeholder="Enter rejection reason..."
-                required
-            ></textarea>
-
-
-            <div class="modal-buttons">
-
-
-                <button
-                    type="button"
-                    class="cancel-button"
-                    onclick="closeRejectModal()"
-                >
-
-                    Cancel
-
-                </button>
-
-
-                <button
-                    type="submit"
-                    name="reject_request"
-                    class="confirm-reject"
-                >
-
-                    ✕ Reject Request
-
-                </button>
-
+                <h2 id="modalItemName">
+                    Item Name
+                </h2>
 
             </div>
 
 
-        </form>
+            <button
+                type="button"
+                class="modal-close"
+                onclick="closeDetailsModal()"
+            >
+                &times;
+            </button>
 
+        </div>
+
+
+        <!-- MODAL BODY -->
+
+        <div class="modal-body">
+
+
+            <!-- STATUS -->
+
+            <div class="modal-status-row">
+
+                <span
+                    id="modalStatus"
+                    class="status-badge"
+                >
+                    Status
+                </span>
+
+            </div>
+
+
+            <!-- ITEM DETAILS -->
+
+            <div class="detail-block">
+
+                <h3>
+                    <i class="fa-solid fa-box-open"></i>
+                    Item Details
+                </h3>
+
+
+                <div class="detail-grid">
+
+                    <div>
+                        <span>Condition</span>
+                        <strong id="modalCondition">-</strong>
+                    </div>
+
+                    <div>
+                        <span>Availability</span>
+                        <strong id="modalAvailability">-</strong>
+                    </div>
+
+                    <div>
+                        <span>Location</span>
+                        <strong id="modalLocation">-</strong>
+                    </div>
+
+                    <div class="full-detail">
+                        <span>Description</span>
+                        <strong id="modalDescription">
+                            -
+                        </strong>
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- BORROWER -->
+
+            <div class="detail-block">
+
+                <h3>
+                    <i class="fa-solid fa-user"></i>
+                    Borrower Details
+                </h3>
+
+
+                <div class="detail-grid">
+
+                    <div>
+                        <span>Name</span>
+                        <strong id="modalBorrower">-</strong>
+                    </div>
+
+                    <div>
+                        <span>Email</span>
+                        <strong id="modalEmail">-</strong>
+                    </div>
+
+                    <div>
+                        <span>Phone</span>
+                        <strong id="modalPhone">-</strong>
+                    </div>
+
+                    <div>
+                        <span>Department</span>
+                        <strong id="modalDepartment">-</strong>
+                    </div>
+
+                    <div>
+                        <span>Year of Study</span>
+                        <strong id="modalYear">-</strong>
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- BORROW DATES -->
+
+            <div class="detail-block">
+
+                <h3>
+                    <i class="fa-solid fa-calendar-days"></i>
+                    Borrow Details
+                </h3>
+
+
+                <div class="detail-grid">
+
+                    <div>
+                        <span>Borrow Date</span>
+                        <strong id="modalBorrowDate">-</strong>
+                    </div>
+
+                    <div>
+                        <span>Expected Return</span>
+                        <strong id="modalReturnDate">-</strong>
+                    </div>
+
+                    <div>
+                        <span>Actual Return</span>
+                        <strong id="modalActualReturn">-</strong>
+                    </div>
+
+                    <div>
+                        <span>Request Date</span>
+                        <strong id="modalRequestDate">-</strong>
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- OWNER MESSAGE -->
+
+            <div
+                id="ownerMessageBlock"
+                class="detail-block message-block"
+                style="display:none;"
+            >
+
+                <h3>
+                    <i class="fa-solid fa-message"></i>
+                    Owner Message
+                </h3>
+
+                <p id="modalOwnerMessage"></p>
+
+            </div>
+
+
+            <!-- ACTION AREA -->
+
+            <div
+                id="modalActions"
+                class="modal-actions"
+            ></div>
+
+
+        </div>
 
     </div>
 
@@ -1768,38 +1577,626 @@ body {
 
 <script>
 
-/* =====================================================
-   REJECT MODAL
-===================================================== */
+/* =========================================================
+   DETAILS MODAL
+========================================================= */
 
-function openRejectModal(requestId) {
+function openDetailsModal(requestId)
+{
+    const data =
+        document.getElementById(
+            'request-data-' + requestId
+        );
+
+    if (!data) {
+        return;
+    }
+
+
+    const status =
+        data.dataset.status || '';
+
+    const item =
+        data.dataset.item || '';
+
+    const description =
+        data.dataset.description || '';
+
+    const condition =
+        data.dataset.condition || '';
+
+    const availability =
+        data.dataset.availability || '';
+
+    const location =
+        data.dataset.location || '';
+
+    const borrower =
+        data.dataset.borrower || '';
+
+    const email =
+        data.dataset.email || '';
+
+    const phone =
+        data.dataset.phone || '';
+
+    const department =
+        data.dataset.department || '';
+
+    const year =
+        data.dataset.year || '';
+
+    const borrowDate =
+        data.dataset.borrowDate || '';
+
+    const returnDate =
+        data.dataset.returnDate || '';
+
+    const actualReturn =
+        data.dataset.actualReturn || '';
+
+    const ownerMessage =
+        data.dataset.ownerMessage || '';
+
+    const requestDate =
+        data.dataset.requestDate || '';
+
 
     document.getElementById(
-        "rejectRequestId"
+        'modalItemName'
+    ).textContent = item || 'Item';
+
+
+    document.getElementById(
+        'modalCondition'
+    ).textContent =
+        condition || 'Not specified';
+
+
+    document.getElementById(
+        'modalAvailability'
+    ).textContent =
+        availability || 'Not specified';
+
+
+    document.getElementById(
+        'modalLocation'
+    ).textContent =
+        location || 'Not specified';
+
+
+    document.getElementById(
+        'modalDescription'
+    ).textContent =
+        description || 'No description available.';
+
+
+    document.getElementById(
+        'modalBorrower'
+    ).textContent =
+        borrower || '-';
+
+
+    document.getElementById(
+        'modalEmail'
+    ).textContent =
+        email || '-';
+
+
+    document.getElementById(
+        'modalPhone'
+    ).textContent =
+        phone || '-';
+
+
+    document.getElementById(
+        'modalDepartment'
+    ).textContent =
+        department || '-';
+
+
+    document.getElementById(
+        'modalYear'
+    ).textContent =
+        year || '-';
+
+
+    document.getElementById(
+        'modalBorrowDate'
+    ).textContent =
+        formatDate(borrowDate);
+
+
+    document.getElementById(
+        'modalReturnDate'
+    ).textContent =
+        formatDate(returnDate);
+
+
+    document.getElementById(
+        'modalActualReturn'
+    ).textContent =
+        formatDate(actualReturn);
+
+
+    document.getElementById(
+        'modalRequestDate'
+    ).textContent =
+        formatDateTime(requestDate);
+
+
+    /* =====================================================
+       STATUS
+    ===================================================== */
+
+    const statusElement =
+        document.getElementById('modalStatus');
+
+    statusElement.textContent = status;
+
+    statusElement.className =
+        'status-badge ' + getStatusClass(status);
+
+
+    /* =====================================================
+       OWNER MESSAGE
+    ===================================================== */
+
+    const messageBlock =
+        document.getElementById(
+            'ownerMessageBlock'
+        );
+
+    const messageText =
+        document.getElementById(
+            'modalOwnerMessage'
+        );
+
+
+    if (ownerMessage) {
+
+        messageText.textContent =
+            ownerMessage;
+
+        messageBlock.style.display =
+            'block';
+
+    } else {
+
+        messageBlock.style.display =
+            'none';
+    }
+
+
+    /* =====================================================
+       ACTION BUTTONS
+    ===================================================== */
+
+    const actions =
+        document.getElementById(
+            'modalActions'
+        );
+
+    actions.innerHTML = '';
+
+
+    /* =====================================================
+       PENDING
+    ===================================================== */
+
+    if (status === 'Pending') {
+
+        actions.innerHTML = `
+
+            <form
+                method="POST"
+                action="manage_requests.php"
+            >
+
+                <input
+                    type="hidden"
+                    name="request_id"
+                    value="${requestId}"
+                >
+
+                <input
+                    type="hidden"
+                    name="action"
+                    value="approve"
+                >
+
+                <button
+                    type="submit"
+                    class="modal-action approve-btn"
+                >
+                    <i class="fa-solid fa-check"></i>
+                    Approve Request
+                </button>
+
+            </form>
+
+
+            <button
+                type="button"
+                class="modal-action reject-btn"
+                onclick="openRejectModal(${requestId})"
+            >
+                <i class="fa-solid fa-xmark"></i>
+                Reject Request
+            </button>
+
+        `;
+    }
+
+
+    /* =====================================================
+       RETURN REQUESTED
+    ===================================================== */
+
+    else if (status === 'Return Requested') {
+
+        actions.innerHTML = `
+
+            <form
+                method="POST"
+                action="manage_requests.php"
+            >
+
+                <input
+                    type="hidden"
+                    name="request_id"
+                    value="${requestId}"
+                >
+
+                <input
+                    type="hidden"
+                    name="action"
+                    value="accept_return"
+                >
+
+                <button
+                    type="submit"
+                    class="modal-action accept-return-btn"
+                >
+                    <i class="fa-solid fa-check"></i>
+                    Accept Return
+                </button>
+
+            </form>
+
+
+            <form
+                method="POST"
+                action="manage_requests.php"
+            >
+
+                <input
+                    type="hidden"
+                    name="request_id"
+                    value="${requestId}"
+                >
+
+                <input
+                    type="hidden"
+                    name="action"
+                    value="reject_return"
+                >
+
+                <button
+                    type="submit"
+                    class="modal-action reject-return-btn"
+                >
+                    <i class="fa-solid fa-xmark"></i>
+                    Reject Return
+                </button>
+
+            </form>
+
+        `;
+    }
+
+
+    /* =====================================================
+       APPROVED
+    ===================================================== */
+
+    else if (status === 'Approved') {
+
+        actions.innerHTML = `
+
+            <div class="info-action approved-info">
+
+                <i class="fa-solid fa-check-circle"></i>
+
+                <span>
+                    Request approved. Waiting for the borrower
+                    to confirm item receipt.
+                </span>
+
+            </div>
+
+        `;
+    }
+
+
+    /* =====================================================
+       ITEM RECEIVED
+    ===================================================== */
+
+    else if (status === 'Item Received') {
+
+        actions.innerHTML = `
+
+            <div class="info-action received-info">
+
+                <i class="fa-solid fa-box-open"></i>
+
+                <span>
+                    Borrower has received the item.
+                    Waiting for return request.
+                </span>
+
+            </div>
+
+        `;
+    }
+
+
+    /* =====================================================
+       REJECTED
+    ===================================================== */
+
+    else if (status === 'Rejected') {
+
+        actions.innerHTML = `
+
+            <div class="info-action rejected-info">
+
+                <i class="fa-solid fa-circle-xmark"></i>
+
+                <span>
+                    This borrow request was rejected.
+                </span>
+
+            </div>
+
+        `;
+    }
+
+
+    /* =====================================================
+       RETURNED
+    ===================================================== */
+
+    else if (status === 'Returned') {
+
+        actions.innerHTML = `
+
+            <div class="info-action returned-info">
+
+                <i class="fa-solid fa-circle-check"></i>
+
+                <span>
+                    Item has been returned successfully.
+                    It is available for borrowing again.
+                </span>
+
+            </div>
+
+        `;
+    }
+
+
+    document
+        .getElementById('detailsModal')
+        .classList.add('show');
+
+    document.body.classList.add('modal-open');
+}
+
+
+/* =========================================================
+   CLOSE DETAILS MODAL
+========================================================= */
+
+function closeDetailsModal()
+{
+    document
+        .getElementById('detailsModal')
+        .classList.remove('show');
+
+    document.body.classList.remove('modal-open');
+}
+
+
+/* =========================================================
+   REJECT MODAL
+========================================================= */
+
+function openRejectModal(requestId)
+{
+    closeDetailsModal();
+
+    const modal =
+        document.getElementById(
+            'rejectModal'
+        );
+
+    document.getElementById(
+        'reject_request_id'
     ).value = requestId;
 
     document.getElementById(
-        "rejectModal"
-    ).style.display = "flex";
+        'owner_message'
+    ).value = '';
+
+    modal.classList.add('show');
+
+    document.body.classList.add(
+        'modal-open'
+    );
 }
 
 
-function closeRejectModal() {
+function closeRejectModal()
+{
+    const modal =
+        document.getElementById(
+            'rejectModal'
+        );
 
+    if (modal) {
+        modal.classList.remove('show');
+    }
+
+    document.body.classList.remove(
+        'modal-open'
+    );
+}
+
+
+/* =========================================================
+   STATUS CLASS
+========================================================= */
+
+function getStatusClass(status)
+{
+    switch (status) {
+
+        case 'Pending':
+            return 'status-pending';
+
+        case 'Approved':
+            return 'status-approved';
+
+        case 'Item Received':
+            return 'status-received';
+
+        case 'Return Requested':
+            return 'status-return';
+
+        case 'Returned':
+            return 'status-returned';
+
+        case 'Rejected':
+            return 'status-rejected';
+
+        default:
+            return 'status-default';
+    }
+}
+
+
+/* =========================================================
+   DATE FORMAT
+========================================================= */
+
+function formatDate(dateString)
+{
+    if (!dateString) {
+        return '-';
+    }
+
+    const date =
+        new Date(dateString + 'T00:00:00');
+
+    if (isNaN(date.getTime())) {
+        return dateString;
+    }
+
+    return date.toLocaleDateString(
+        'en-GB',
+        {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+        }
+    );
+}
+
+
+/* =========================================================
+   DATE TIME FORMAT
+========================================================= */
+
+function formatDateTime(dateString)
+{
+    if (!dateString) {
+        return '-';
+    }
+
+    const date =
+        new Date(
+            dateString.replace(' ', 'T')
+        );
+
+    if (isNaN(date.getTime())) {
+        return dateString;
+    }
+
+    return date.toLocaleString(
+        'en-GB',
+        {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        }
+    );
+}
+
+
+/* =========================================================
+   CLICK OUTSIDE MODAL
+========================================================= */
+
+document
+    .getElementById('detailsModal')
+    .addEventListener(
+        'click',
+        function(event) {
+
+            if (event.target === this) {
+                closeDetailsModal();
+            }
+
+        }
+    );
+
+
+const rejectModal =
     document.getElementById(
-        "rejectModal"
-    ).style.display = "none";
+        'rejectModal'
+    );
+
+if (rejectModal) {
+
+    rejectModal.addEventListener(
+        'click',
+        function(event) {
+
+            if (event.target === this) {
+                closeRejectModal();
+            }
+
+        }
+    );
+
 }
 
 
-window.addEventListener(
-    "click",
+/* =========================================================
+   ESCAPE KEY
+========================================================= */
+
+document.addEventListener(
+    'keydown',
     function(event) {
 
-        const modal =
-            document.getElementById("rejectModal");
+        if (event.key === 'Escape') {
 
-        if (event.target === modal) {
+            closeDetailsModal();
 
             closeRejectModal();
 
@@ -1808,9 +2205,148 @@ window.addEventListener(
     }
 );
 
+
+/* =========================================================
+   AUTO HIDE ALERT
+========================================================= */
+
+setTimeout(
+    function() {
+
+        const alertBox =
+            document.querySelector('.alert');
+
+        if (alertBox) {
+
+            alertBox.style.opacity = '0';
+
+            setTimeout(
+                function() {
+
+                    if (alertBox) {
+                        alertBox.remove();
+                    }
+
+                },
+                400
+            );
+        }
+
+    },
+    6000
+);
+
 </script>
 
 
-</body>
+<!-- =========================================================
+     REJECT MODAL
+========================================================= -->
 
+<div
+    id="rejectModal"
+    class="modal"
+>
+
+    <div class="modal-content reject-modal">
+
+
+        <div class="modal-header reject-header">
+
+            <div>
+
+                <span class="modal-small-title">
+                    Request Action
+                </span>
+
+                <h2>
+                    Reject Borrow Request
+                </h2>
+
+            </div>
+
+
+            <button
+                type="button"
+                class="modal-close"
+                onclick="closeRejectModal()"
+            >
+                &times;
+            </button>
+
+        </div>
+
+
+        <form
+            method="POST"
+            action="manage_requests.php"
+        >
+
+            <input
+                type="hidden"
+                name="request_id"
+                id="reject_request_id"
+                value=""
+            >
+
+            <input
+                type="hidden"
+                name="action"
+                value="reject"
+            >
+
+
+            <div class="modal-body">
+
+                <label for="owner_message">
+                    Reason for rejection
+                </label>
+
+                <textarea
+                    name="owner_message"
+                    id="owner_message"
+                    rows="5"
+                    placeholder="Enter a message for the borrower..."
+                ></textarea>
+
+                <p class="modal-note">
+                    This message will be sent to the borrower
+                    by email.
+                </p>
+
+            </div>
+
+
+            <div class="modal-footer">
+
+                <button
+                    type="button"
+                    class="cancel-modal-btn"
+                    onclick="closeRejectModal()"
+                >
+                    Cancel
+                </button>
+
+
+                <button
+                    type="submit"
+                    class="confirm-reject-btn"
+                >
+
+                    <i class="fa-solid fa-xmark"></i>
+
+                    Reject Request
+
+                </button>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+</body>
 </html>

@@ -314,7 +314,7 @@ if (!$category_query) {
             ?>
 
                 <img
-                    src="images/default.png"
+                    src="images/default.jpg"
                     alt="Default Profile"
                 >
 

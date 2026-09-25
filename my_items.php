@@ -107,7 +107,7 @@ Logout
 
 <div class="profile">
 
-<img src="images/default.png">
+<img src="images/default.jpg">
 
 <span><?php echo $user['full_name']; ?></span>
 

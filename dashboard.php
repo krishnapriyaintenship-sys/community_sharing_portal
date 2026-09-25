@@ -315,11 +315,32 @@ rel="stylesheet">
 
         </li>
 
-
         <!-- Logout -->
 
         <li>
+<li>
 
+            <a href="feedback.php">
+
+                <i class="fa-solid fa-clock-rotate-left"></i>
+
+                Feedback
+
+            </a>
+
+        </li>
+        <li>
+
+            <a href="contact.php">
+
+                <i class="fa-solid fa-clock-rotate-left"></i>
+
+                contact admin
+
+            </a>
+
+        </li>
+<li>
             <a href="logout.php">
 
                 <i class="fa-solid fa-right-from-bracket"></i>
@@ -411,7 +432,7 @@ else
 ?>
 
 <img
-src="images/default.png"
+src="images/default.jpg"
 alt="Profile">
 
 <?php
@@ -645,7 +666,6 @@ alt="CampusShare Banner">
 <p>View all your borrowing records.</p>
 
 </a>
-
 
 
 <!-- Notifications -->

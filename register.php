@@ -1,7 +1,7 @@
 <?php
 session_start();
 
-if(isset($_SESSION['user_id'])){
+if (isset($_SESSION['user_id'])) {
     header("Location: dashboard.php");
     exit();
 }
@@ -41,15 +41,14 @@ rel="stylesheet">
             <h1>Join CampusShare</h1>
 
             <p>
-
                 Share books, calculators, laptops and project kits
                 with your college community.
-
             </p>
 
         </div>
 
     </div>
+
 
     <!-- Right Side -->
 
@@ -59,124 +58,172 @@ rel="stylesheet">
 
             <div class="logo">
 
-                <img src="images/logo.png" alt="Logo">
+                <img src="images/logo.png" alt="CampusShare Logo">
 
                 <h2>CampusShare</h2>
 
             </div>
 
+
             <h3>Create Your Account</h3>
 
+
             <form
-            action="register_process.php"
-            method="POST"
-            enctype="multipart/form-data">
+                action="register_process.php"
+                method="POST"
+                enctype="multipart/form-data"
+                id="registerForm"
+            >
 
                 <!-- Full Name -->
 
                 <div class="input-group">
 
-                    <label>Full Name</label>
+                    <label for="full_name">Full Name</label>
 
                     <div class="input-field">
 
                         <i class="fa-solid fa-user"></i>
 
                         <input
-                        type="text"
-                        name="full_name"
-                        placeholder="Enter Full Name"
-                        required>
+                            type="text"
+                            id="full_name"
+                            name="full_name"
+                            placeholder="Enter Full Name"
+                            maxlength="100"
+                            required
+                        >
 
                     </div>
 
                 </div>
 
+
                 <!-- Email -->
 
                 <div class="input-group">
 
-                    <label>College Email</label>
+                    <label for="email">College Email</label>
 
                     <div class="input-field">
 
                         <i class="fa-solid fa-envelope"></i>
 
                         <input
-                        type="email"
-                        name="email"
-                        placeholder="Enter College Email"
-                        required>
+                            type="email"
+                            id="email"
+                            name="email"
+                            placeholder="Enter College Email"
+                            maxlength="100"
+                            autocomplete="email"
+                            required
+                        >
 
                     </div>
 
                 </div>
 
+
                 <!-- Phone -->
 
                 <div class="input-group">
 
-                    <label>Phone Number</label>
+                    <label for="phone">Phone Number</label>
 
                     <div class="input-field">
 
                         <i class="fa-solid fa-phone"></i>
 
                         <input
-                        type="text"
-                        name="phone"
-                        placeholder="Enter Phone Number"
-                        required>
+                            type="tel"
+                            id="phone"
+                            name="phone"
+                            placeholder="Enter 10-digit Phone Number"
+                            maxlength="10"
+                            pattern="[0-9]{10}"
+                            inputmode="numeric"
+                            required
+                        >
 
                     </div>
 
                 </div>
+
 
                 <!-- Department -->
 
                 <div class="input-group">
 
-                    <label>Department</label>
+                    <label for="department">Department</label>
 
                     <div class="input-field">
 
                         <i class="fa-solid fa-building-columns"></i>
 
-                        <select name="department" required>
+                        <select
+                            id="department"
+                            name="department"
+                            required
+                        >
 
                             <option value="">Select Department</option>
 
-                            <option>BCA</option>
-                            <option>BSc Computer Science</option>
-                            <option>BCom</option>
-                            <option>BA English</option>
-                            <option>BBA</option>
-                            <option>MCA</option>
+                            <option value="BCA">BCA</option>
+
+                            <option value="BSc Computer Science">
+                                BSc Computer Science
+                            </option>
+
+                            <option value="BCom">BCom</option>
+
+                            <option value="BA English">
+                                BA English
+                            </option>
+
+                            <option value="BBA">BBA</option>
+
+                            <option value="MCA">MCA</option>
 
                         </select>
 
                     </div>
 
                 </div>
+
 
                 <!-- Year -->
 
                 <div class="input-group">
 
-                    <label>Year of Study</label>
+                    <label for="year">Year of Study</label>
 
                     <div class="input-field">
 
                         <i class="fa-solid fa-calendar"></i>
 
-                        <select name="year">
+                        <select
+                            id="year"
+                            name="year"
+                            required
+                        >
 
                             <option value="">Select Year</option>
 
-                            <option>First Year</option>
-                            <option>Second Year</option>
-                            <option>Third Year</option>
-                            <option>Final Year</option>
+                            <option value="First Year">
+                                First Year
+                            </option>
+
+                            <option value="Second Year">
+                                Second Year
+                            </option>
+
+                            <option value="Third Year">
+                                Third Year
+                            </option>
+
+                            <option value="Final Year">
+                                Final Year
+                            </option>
 
                         </select>
 
@@ -184,60 +231,80 @@ rel="stylesheet">
 
                 </div>
 
+
                 <!-- Profile Photo -->
 
                 <div class="input-group">
 
-                    <label>Profile Photo</label>
+                    <label for="profile_image">
+                        Profile Photo
+                    </label>
 
                     <input
-                    type="file"
-                    name="profile_image"
-                    accept=".jpg,.jpeg,.png">
+                        type="file"
+                        id="profile_image"
+                        name="profile_image"
+                        accept=".jpg,.jpeg,.png"
+                    >
+
+                    <small class="file-note">
+                        JPG, JPEG or PNG. Maximum 2 MB.
+                    </small>
 
                 </div>
+
 
                 <!-- Password -->
 
                 <div class="input-group">
 
-                    <label>Password</label>
+                    <label for="password">Password</label>
 
                     <div class="input-field">
 
                         <i class="fa-solid fa-lock"></i>
 
                         <input
-                        type="password"
-                        id="password"
-                        name="password"
-                        placeholder="Create Password"
-                        required>
+                            type="password"
+                            id="password"
+                            name="password"
+                            placeholder="Create Password"
+                            minlength="6"
+                            autocomplete="new-password"
+                            required
+                        >
 
                     </div>
 
                 </div>
+
 
                 <!-- Confirm Password -->
 
                 <div class="input-group">
 
-                    <label>Confirm Password</label>
+                    <label for="confirmPassword">
+                        Confirm Password
+                    </label>
 
                     <div class="input-field">
 
                         <i class="fa-solid fa-lock"></i>
 
                         <input
-                        type="password"
-                        id="confirmPassword"
-                        name="confirm_password"
-                        placeholder="Confirm Password"
-                        required>
+                            type="password"
+                            id="confirmPassword"
+                            name="confirm_password"
+                            placeholder="Confirm Password"
+                            minlength="6"
+                            autocomplete="new-password"
+                            required
+                        >
 
                     </div>
 
                 </div>
+
 
                 <!-- Terms -->
 
@@ -246,17 +313,22 @@ rel="stylesheet">
                     <label>
 
                         <input
-                        type="checkbox"
-                        required>
+                            type="checkbox"
+                            name="terms"
+                            value="1"
+                            required
+                        >
 
-                        I agree to the Terms &
-                        Conditions
+                        I agree to the Terms & Conditions
 
                     </label>
 
                 </div>
 
-                <button type="submit">
+
+                <!-- Register Button -->
+
+                <button type="submit" id="registerButton">
 
                     <i class="fa-solid fa-user-plus"></i>
 
@@ -266,14 +338,13 @@ rel="stylesheet">
 
             </form>
 
+
             <div class="login-link">
 
                 Already have an account?
 
                 <a href="login.php">
-
                     Login Here
-
                 </a>
 
             </div>
@@ -283,6 +354,7 @@ rel="stylesheet">
     </div>
 
 </div>
+
 
 <script src="js/register.js"></script>
 

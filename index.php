@@ -721,9 +721,16 @@ For any queries regarding CampusShare, please contact the project owner.
 
 <p>
 
-Krishnapriya K U
+Krishnapriya K U 
 
 </p>
+
+<p>
+
+Megha M Nair
+
+</p>
+
 
 </div>
 
@@ -735,7 +742,7 @@ Krishnapriya K U
 
 <p>
 
-krishnapriya@example.com
+campusshareadmin@gmail.com
 
 </p>
 

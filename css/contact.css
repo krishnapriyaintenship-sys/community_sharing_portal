@@ -1,0 +1,450 @@
+/* =========================================================
+   CAMPUSSHARE - CONTACT ADMIN PAGE
+   ========================================================= */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+
+/* =========================================================
+   BODY
+   ========================================================= */
+
+body {
+    font-family: "Poppins", Arial, sans-serif;
+    background: #f4f7fb;
+    color: #1e293b;
+    min-height: 100vh;
+}
+
+
+/* =========================================================
+   PAGE
+   ========================================================= */
+
+.contact-page {
+    min-height: 100vh;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 80px 20px 40px;
+
+    position: relative;
+}
+
+
+/* =========================================================
+   BACK BUTTON
+   ========================================================= */
+
+.back-button {
+    position: absolute;
+
+    top: 25px;
+    left: 30px;
+
+    display: inline-flex;
+    align-items: center;
+
+    gap: 8px;
+
+    padding: 10px 17px;
+
+    background: #ffffff;
+    color: #2563eb;
+
+    border-radius: 8px;
+
+    text-decoration: none;
+
+    font-size: 13px;
+    font-weight: 600;
+
+    box-shadow:
+        0 4px 15px rgba(15, 23, 42, 0.08);
+
+    transition: all 0.25s ease;
+}
+
+.back-button:hover {
+    background: #2563eb;
+    color: #ffffff;
+
+    transform: translateY(-2px);
+}
+
+
+/* =========================================================
+   CONTACT CARD
+   ========================================================= */
+
+.contact-card {
+    width: 100%;
+    max-width: 650px;
+
+    background: #ffffff;
+
+    border-radius: 18px;
+
+    padding: 40px;
+
+    box-shadow:
+        0 12px 35px rgba(15, 23, 42, 0.10);
+
+    text-align: center;
+}
+
+
+/* =========================================================
+   ICON
+   ========================================================= */
+
+.contact-icon {
+    width: 70px;
+    height: 70px;
+
+    margin: 0 auto 18px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    background: #dbeafe;
+    color: #2563eb;
+
+    border-radius: 50%;
+
+    font-size: 30px;
+}
+
+
+/* =========================================================
+   TITLE
+   ========================================================= */
+
+.contact-card h1 {
+    color: #172554;
+
+    font-size: 28px;
+    font-weight: 700;
+
+    margin-bottom: 10px;
+}
+
+
+/* =========================================================
+   SUBTITLE
+   ========================================================= */
+
+.subtitle {
+    color: #64748b;
+
+    font-size: 13px;
+
+    line-height: 1.7;
+
+    margin-bottom: 28px;
+}
+
+
+/* =========================================================
+   MESSAGES
+   ========================================================= */
+
+.message {
+    width: 100%;
+
+    padding: 13px 15px;
+
+    margin-bottom: 22px;
+
+    border-radius: 9px;
+
+    display: flex;
+    align-items: center;
+
+    gap: 9px;
+
+    font-size: 13px;
+
+    text-align: left;
+}
+
+
+.success-message {
+    background: #dcfce7;
+
+    color: #166534;
+
+    border: 1px solid #bbf7d0;
+}
+
+
+.error-message {
+    background: #fee2e2;
+
+    color: #991b1b;
+
+    border: 1px solid #fecaca;
+}
+
+
+/* =========================================================
+   FORM GROUP
+   ========================================================= */
+
+.form-group {
+    width: 100%;
+
+    text-align: left;
+
+    margin-bottom: 20px;
+}
+
+
+.form-group > label {
+    display: block;
+
+    color: #334155;
+
+    font-size: 14px;
+
+    font-weight: 600;
+
+    margin-bottom: 8px;
+}
+
+
+/* =========================================================
+   INPUT BOX
+   ========================================================= */
+
+.input-box {
+    position: relative;
+
+    width: 100%;
+}
+
+
+.input-box i {
+    position: absolute;
+
+    left: 14px;
+    top: 50%;
+
+    transform: translateY(-50%);
+
+    color: #94a3b8;
+
+    font-size: 14px;
+}
+
+
+.input-box input {
+    width: 100%;
+
+    height: 48px;
+
+    padding: 0 14px 0 42px;
+
+    border: 1px solid #dbe2ea;
+
+    border-radius: 9px;
+
+    outline: none;
+
+    background: #ffffff;
+
+    color: #334155;
+
+    font-family: "Poppins", Arial, sans-serif;
+
+    font-size: 13px;
+
+    transition: all 0.2s ease;
+}
+
+
+.input-box input:focus {
+    border-color: #2563eb;
+
+    box-shadow:
+        0 0 0 3px rgba(37, 99, 235, 0.10);
+}
+
+
+.input-box input::placeholder {
+    color: #94a3b8;
+}
+
+
+/* =========================================================
+   TEXTAREA
+   ========================================================= */
+
+textarea {
+    width: 100%;
+
+    min-height: 150px;
+
+    resize: vertical;
+
+    padding: 14px;
+
+    border: 1px solid #dbe2ea;
+
+    border-radius: 10px;
+
+    outline: none;
+
+    background: #ffffff;
+
+    color: #334155;
+
+    font-family: "Poppins", Arial, sans-serif;
+
+    font-size: 13px;
+
+    line-height: 1.6;
+
+    transition: all 0.2s ease;
+}
+
+
+textarea:focus {
+    border-color: #2563eb;
+
+    box-shadow:
+        0 0 0 3px rgba(37, 99, 235, 0.10);
+}
+
+
+textarea::placeholder {
+    color: #94a3b8;
+}
+
+
+/* =========================================================
+   CHARACTER COUNT
+   ========================================================= */
+
+.character-count {
+    text-align: right;
+
+    margin-top: 5px;
+
+    color: #94a3b8;
+
+    font-size: 10px;
+}
+
+
+/* =========================================================
+   SUBMIT BUTTON
+   ========================================================= */
+
+.submit-button {
+    width: 100%;
+
+    border: none;
+
+    padding: 13px 20px;
+
+    border-radius: 9px;
+
+    background: #2563eb;
+
+    color: #ffffff;
+
+    font-family: "Poppins", Arial, sans-serif;
+
+    font-size: 14px;
+
+    font-weight: 600;
+
+    cursor: pointer;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    gap: 8px;
+
+    transition: all 0.25s ease;
+}
+
+
+.submit-button:hover {
+    background: #1d4ed8;
+
+    transform: translateY(-2px);
+
+    box-shadow:
+        0 6px 18px rgba(37, 99, 235, 0.25);
+}
+
+
+.submit-button:active {
+    transform: translateY(0);
+}
+
+
+/* =========================================================
+   MOBILE
+   ========================================================= */
+
+@media (max-width: 700px) {
+
+    .contact-page {
+        padding: 85px 15px 30px;
+    }
+
+    .back-button {
+        top: 20px;
+        left: 15px;
+    }
+
+    .contact-card {
+        padding: 30px 22px;
+    }
+
+    .contact-card h1 {
+        font-size: 24px;
+    }
+
+    .contact-icon {
+        width: 60px;
+        height: 60px;
+
+        font-size: 25px;
+    }
+}
+
+
+/* =========================================================
+   SMALL MOBILE
+   ========================================================= */
+
+@media (max-width: 450px) {
+
+    .contact-card {
+        padding: 25px 18px;
+    }
+
+    .contact-card h1 {
+        font-size: 21px;
+    }
+
+    .subtitle {
+        font-size: 12px;
+    }
+
+    textarea {
+        min-height: 130px;
+    }
+}

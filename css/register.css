@@ -2,310 +2,489 @@
    CampusShare Register Page
 ========================================== */
 
-*{
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
-    font-family:'Poppins',sans-serif;
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Poppins', sans-serif;
 }
 
-body{
+body {
 
-    background:linear-gradient(135deg,#2563eb,#7c3aed);
-    min-height:100vh;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    padding:30px;
+    background: linear-gradient(135deg, #2563eb, #7c3aed);
 
-}
+    min-height: 100vh;
 
-/* Main Container */
+    display: flex;
 
-.container{
+    justify-content: center;
 
-    width:1200px;
-    max-width:100%;
-    background:#fff;
-    border-radius:20px;
-    overflow:hidden;
-    display:flex;
-    box-shadow:0 20px 40px rgba(0,0,0,.2);
+    align-items: center;
+
+    padding: 30px;
 
 }
 
-/* Left Side */
 
-.left-panel{
+/* ==========================================
+   Main Container
+========================================== */
 
-    width:45%;
-    position:relative;
+.container {
 
-}
+    width: 1200px;
 
-.left-panel img{
+    max-width: 100%;
 
-    width:100%;
-    height:100%;
-    object-fit:cover;
+    background: #fff;
 
-}
+    border-radius: 20px;
 
-.overlay{
+    overflow: hidden;
 
-    position:absolute;
-    top:0;
-    left:0;
-    width:100%;
-    height:100%;
+    display: flex;
 
-    background:rgba(30,64,175,.75);
-
-    display:flex;
-    flex-direction:column;
-    justify-content:center;
-    align-items:center;
-
-    text-align:center;
-
-    color:#fff;
-
-    padding:40px;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.20);
 
 }
 
-.overlay h1{
 
-    font-size:42px;
-    margin-bottom:20px;
+/* ==========================================
+   Left Panel
+========================================== */
 
-}
+.left-panel {
 
-.overlay p{
+    width: 45%;
 
-    font-size:18px;
-    line-height:30px;
+    position: relative;
 
-}
-
-/* Right Side */
-
-.right-panel{
-
-    width:55%;
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    padding:40px;
+    min-height: 850px;
 
 }
 
-.form-box{
+.left-panel img {
 
-    width:100%;
+    width: 100%;
 
-}
+    height: 100%;
 
-.logo{
+    object-fit: cover;
 
-    text-align:center;
-    margin-bottom:20px;
-
-}
-
-.logo img{
-
-    width:90px;
-    height:90px;
-    object-fit:contain;
+    display: block;
 
 }
 
-.logo h2{
+.overlay {
 
-    color:#2563eb;
-    margin-top:10px;
+    position: absolute;
 
-}
+    top: 0;
 
-.form-box h3{
+    left: 0;
 
-    text-align:center;
-    margin-bottom:25px;
-    color:#333;
+    width: 100%;
 
-}
+    height: 100%;
 
-/* Input */
+    background: rgba(30, 64, 175, 0.75);
 
-.input-group{
+    display: flex;
 
-    margin-bottom:18px;
+    flex-direction: column;
 
-}
+    justify-content: center;
 
-.input-group label{
+    align-items: center;
 
-    display:block;
-    margin-bottom:8px;
-    font-weight:600;
-    color:#333;
+    text-align: center;
+
+    color: #fff;
+
+    padding: 40px;
 
 }
 
-.input-field{
+.overlay h1 {
 
-    display:flex;
-    align-items:center;
-    border:1px solid #ccc;
-    border-radius:10px;
-    padding:0 15px;
-    transition:.3s;
+    font-size: 42px;
+
+    margin-bottom: 20px;
 
 }
 
-.input-field:focus-within{
+.overlay p {
 
-    border-color:#2563eb;
-    box-shadow:0 0 10px rgba(37,99,235,.3);
+    font-size: 18px;
+
+    line-height: 30px;
 
 }
 
-.input-field i{
 
-    color:#2563eb;
-    margin-right:10px;
+/* ==========================================
+   Right Panel
+========================================== */
+
+.right-panel {
+
+    width: 55%;
+
+    display: flex;
+
+    justify-content: center;
+
+    align-items: center;
+
+    padding: 40px;
+
+}
+
+.form-box {
+
+    width: 100%;
+
+    max-width: 600px;
+
+}
+
+
+/* ==========================================
+   Logo
+========================================== */
+
+.logo {
+
+    text-align: center;
+
+    margin-bottom: 20px;
+
+}
+
+.logo img {
+
+    width: 90px;
+
+    height: 90px;
+
+    object-fit: contain;
+
+}
+
+.logo h2 {
+
+    color: #2563eb;
+
+    margin-top: 10px;
+
+}
+
+
+/* ==========================================
+   Heading
+========================================== */
+
+.form-box h3 {
+
+    text-align: center;
+
+    margin-bottom: 25px;
+
+    color: #333;
+
+}
+
+
+/* ==========================================
+   Input Group
+========================================== */
+
+.input-group {
+
+    margin-bottom: 18px;
+
+}
+
+.input-group label {
+
+    display: block;
+
+    margin-bottom: 8px;
+
+    font-weight: 600;
+
+    color: #333;
+
+}
+
+
+/* ==========================================
+   Input Field
+========================================== */
+
+.input-field {
+
+    display: flex;
+
+    align-items: center;
+
+    border: 1px solid #ccc;
+
+    border-radius: 10px;
+
+    padding: 0 15px;
+
+    transition: 0.3s;
+
+    background: #fff;
+
+}
+
+.input-field:focus-within {
+
+    border-color: #2563eb;
+
+    box-shadow: 0 0 10px rgba(37, 99, 235, 0.30);
+
+}
+
+.input-field > i {
+
+    color: #2563eb;
+
+    margin-right: 10px;
+
+    flex-shrink: 0;
 
 }
 
 .input-field input,
-.input-field select{
+.input-field select {
 
-    width:100%;
-    padding:14px;
-    border:none;
-    outline:none;
-    font-size:15px;
-    background:transparent;
+    width: 100%;
 
-}
+    padding: 14px;
 
-/* File Upload */
+    border: none;
 
-input[type=file]{
+    outline: none;
 
-    width:100%;
-    padding:12px;
-    border:1px solid #ccc;
-    border-radius:10px;
-    background:#f8fafc;
+    font-size: 15px;
+
+    background: transparent;
 
 }
 
-/* Terms */
 
-.terms{
+/* ==========================================
+   File Upload
+========================================== */
 
-    margin:20px 0;
-    font-size:14px;
+input[type="file"] {
 
-}
+    width: 100%;
 
-.terms input{
+    padding: 12px;
 
-    margin-right:8px;
+    border: 1px solid #ccc;
 
-}
+    border-radius: 10px;
 
-/* Button */
+    background: #f8fafc;
 
-button{
-
-    width:100%;
-    padding:15px;
-    background:#2563eb;
-    color:#fff;
-    border:none;
-    border-radius:10px;
-    font-size:17px;
-    cursor:pointer;
-    transition:.3s;
+    cursor: pointer;
 
 }
 
-button:hover{
+.file-note {
 
-    background:#1d4ed8;
-    transform:translateY(-2px);
+    display: block;
 
-}
+    margin-top: 5px;
 
-/* Login */
+    color: #777;
 
-.login-link{
-
-    margin-top:20px;
-    text-align:center;
+    font-size: 12px;
 
 }
 
-.login-link a{
 
-    text-decoration:none;
-    color:#2563eb;
-    font-weight:600;
+/* ==========================================
+   Image Preview
+========================================== */
 
-}
+.profile-preview {
 
-.login-link a:hover{
+    width: 120px;
 
-    text-decoration:underline;
+    height: 120px;
 
-}
+    border-radius: 50%;
 
-/* Responsive */
+    margin-top: 15px;
 
-@media(max-width:900px){
+    display: none;
 
-.container{
+    object-fit: cover;
 
-    flex-direction:column;
-
-}
-
-.left-panel,
-.right-panel{
-
-    width:100%;
+    border: 3px solid #2563eb;
 
 }
 
-.left-panel{
 
-    height:300px;
+/* ==========================================
+   Terms
+========================================== */
 
-}
+.terms {
 
-}
+    margin: 20px 0;
 
-@media(max-width:600px){
+    font-size: 14px;
 
-.overlay h1{
-
-    font-size:30px;
-
-}
-
-.overlay p{
-
-    font-size:15px;
+    color: #444;
 
 }
 
-.right-panel{
+.terms input {
 
-    padding:20px;
+    margin-right: 8px;
 
 }
+
+
+/* ==========================================
+   Button
+========================================== */
+
+button {
+
+    width: 100%;
+
+    padding: 15px;
+
+    background: #2563eb;
+
+    color: #fff;
+
+    border: none;
+
+    border-radius: 10px;
+
+    font-size: 17px;
+
+    cursor: pointer;
+
+    transition: 0.3s;
+
+}
+
+button:hover {
+
+    background: #1d4ed8;
+
+    transform: translateY(-2px);
+
+}
+
+button:disabled {
+
+    opacity: 0.7;
+
+    cursor: not-allowed;
+
+    transform: none;
+
+}
+
+
+/* ==========================================
+   Login Link
+========================================== */
+
+.login-link {
+
+    margin-top: 20px;
+
+    text-align: center;
+
+    color: #444;
+
+}
+
+.login-link a {
+
+    text-decoration: none;
+
+    color: #2563eb;
+
+    font-weight: 600;
+
+}
+
+.login-link a:hover {
+
+    text-decoration: underline;
+
+}
+
+
+/* ==========================================
+   Responsive
+========================================== */
+
+@media (max-width: 900px) {
+
+    .container {
+
+        flex-direction: column;
+
+    }
+
+    .left-panel,
+    .right-panel {
+
+        width: 100%;
+
+    }
+
+    .left-panel {
+
+        height: 300px;
+
+        min-height: 300px;
+
+    }
+
+}
+
+
+@media (max-width: 600px) {
+
+    body {
+
+        padding: 15px;
+
+    }
+
+    .overlay h1 {
+
+        font-size: 30px;
+
+    }
+
+    .overlay p {
+
+        font-size: 15px;
+
+        line-height: 24px;
+
+    }
+
+    .right-panel {
+
+        padding: 20px;
+
+    }
 
 }

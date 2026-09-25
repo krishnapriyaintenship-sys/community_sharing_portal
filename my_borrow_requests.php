@@ -1,167 +1,505 @@
 <?php
+
 session_start();
 
-if(!isset($_SESSION['user_id']))
-{
-    header("Location:login.php");
+/* =========================================================
+   LOGIN CHECK
+========================================================= */
+
+if (!isset($_SESSION['user_id'])) {
+
+    header("Location: login.php");
     exit();
+
 }
 
-include("includes/db.php");
 
-$user_id=$_SESSION['user_id'];
+/* =========================================================
+   DATABASE + EMAIL
+========================================================= */
 
-
-/* =====================================================
-   LOGGED IN USER
-===================================================== */
-
-$user_query=mysqli_query($conn,
-"SELECT * FROM users WHERE user_id='$user_id'");
-
-$user=mysqli_fetch_assoc($user_query);
+require_once "includes/db.php";
+require_once "includes/notification_mail.php";
 
 
-/* =====================================================
-   RETURN ITEM REQUEST
-===================================================== */
+/* =========================================================
+   USER ID
+========================================================= */
 
-if($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['return_item']))
-{
-    $request_id = (int)($_POST['request_id'] ?? 0);
+$user_id = (int) $_SESSION['user_id'];
+
+$user_name = $_SESSION['full_name'] ?? 'User';
+
+
+/* =========================================================
+   MESSAGE
+========================================================= */
+
+$message = "";
+$message_type = "";
+
+
+/* =========================================================
+   CANCEL PENDING REQUEST
+========================================================= */
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST'
+    && isset($_POST['cancel_request'])
+) {
+
+    $request_id =
+        (int) ($_POST['request_id'] ?? 0);
+
+
+    if ($request_id <= 0) {
+
+        $message = "Invalid request.";
+        $message_type = "error";
+
+    } else {
+
+        /*
+         * Only the borrower who created the request
+         * can cancel it.
+         *
+         * Only Pending request can be deleted.
+         */
+
+        $stmt = $conn->prepare("
+            DELETE FROM borrow_requests
+
+            WHERE request_id = ?
+              AND borrower_id = ?
+              AND status = 'Pending'
+        ");
+
+
+        if ($stmt) {
+
+            $stmt->bind_param(
+                "ii",
+                $request_id,
+                $user_id
+            );
+
+
+            if (
+                $stmt->execute()
+                && $stmt->affected_rows > 0
+            ) {
+
+                $message =
+                    "Borrow request cancelled successfully.";
+
+                $message_type = "success";
+
+            } else {
+
+                $message =
+                    "This request cannot be cancelled.";
+
+                $message_type = "error";
+
+            }
+
+
+            $stmt->close();
+
+        } else {
+
+            $message = "Database error.";
+            $message_type = "error";
+
+        }
+
+    }
+
+}
+
+
+/* =========================================================
+   ITEM RECEIVED
+========================================================= */
+
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST'
+    && isset($_POST['received'])
+) {
+
+    $request_id =
+        (int) ($_POST['request_id'] ?? 0);
+
 
     /*
-       Only the borrower who owns the request can
-       send a return request.
+     * Get approved request details.
+     */
 
-       The request must currently be Approved.
-    */
+    $stmt = $conn->prepare("
+        SELECT
 
-    $return_sql = "
-        UPDATE borrow_requests
-        SET status='Return Requested'
-        WHERE request_id=?
-        AND borrower_id=?
-        AND status='Approved'
-    ";
+            br.request_id,
+            br.item_id,
+            br.owner_id,
+            br.status,
 
-    $return_stmt = mysqli_prepare($conn, $return_sql);
+            i.item_name,
 
-    if($return_stmt)
-    {
-        mysqli_stmt_bind_param(
-            $return_stmt,
+            owner.full_name AS owner_name,
+            owner.email AS owner_email
+
+        FROM borrow_requests br
+
+        INNER JOIN items i
+            ON br.item_id = i.item_id
+
+        INNER JOIN users owner
+            ON br.owner_id = owner.user_id
+
+        WHERE br.request_id = ?
+          AND br.borrower_id = ?
+          AND br.status = 'Approved'
+
+        LIMIT 1
+    ");
+
+
+    if ($stmt) {
+
+        $stmt->bind_param(
             "ii",
             $request_id,
             $user_id
         );
 
-        mysqli_stmt_execute($return_stmt);
+        $stmt->execute();
 
-        mysqli_stmt_close($return_stmt);
+        $result =
+            $stmt->get_result();
+
+        $request =
+            $result->fetch_assoc();
+
+        $stmt->close();
+
+
+        if ($request) {
+
+            /*
+             * Approved
+             *     ↓
+             * Item Received
+             */
+
+            $update = $conn->prepare("
+                UPDATE borrow_requests
+
+                SET status = 'Item Received'
+
+                WHERE request_id = ?
+                  AND borrower_id = ?
+                  AND status = 'Approved'
+            ");
+
+
+            if ($update) {
+
+                $update->bind_param(
+                    "ii",
+                    $request_id,
+                    $user_id
+                );
+
+
+                if (
+                    $update->execute()
+                    && $update->affected_rows > 0
+                ) {
+
+                    /*
+                     * Send email to owner.
+                     */
+
+                    sendItemReceivedEmail(
+                        $request['owner_email'],
+                        $request['owner_name'],
+                        $user_name,
+                        $request['item_name']
+                    );
+
+
+                    $message =
+                        "Item received successfully. "
+                        . "The owner has been notified.";
+
+                    $message_type = "success";
+
+                } else {
+
+                    $message =
+                        "Unable to update the request.";
+
+                    $message_type = "error";
+
+                }
+
+
+                $update->close();
+
+            }
+
+        } else {
+
+            $message =
+                "This request is not ready for Item Received.";
+
+            $message_type = "error";
+
+        }
+
     }
 
-    /*
-       Refresh the page after submitting the
-       return request.
-    */
-
-    header("Location: my_borrow_requests.php");
-    exit();
 }
 
 
-/* =====================================================
-   BORROW REQUESTS
-===================================================== */
+/* =========================================================
+   RETURN ITEM
+========================================================= */
 
-$request_query=mysqli_query($conn,"
-SELECT
-borrow_requests.*,
-items.item_name,
-items.image,
-users.full_name
+if (
+    $_SERVER['REQUEST_METHOD'] === 'POST'
+    && isset($_POST['return_item'])
+) {
 
-FROM borrow_requests
+    $request_id =
+        (int) ($_POST['request_id'] ?? 0);
 
-INNER JOIN items
-ON borrow_requests.item_id=items.item_id
 
-INNER JOIN users
-ON borrow_requests.owner_id=users.user_id
+    /*
+     * Get Item Received request.
+     */
 
-WHERE borrow_requests.borrower_id='$user_id'
+    $stmt = $conn->prepare("
+        SELECT
 
-ORDER BY borrow_requests.request_date DESC
+            br.request_id,
+            br.item_id,
+            br.owner_id,
+            br.status,
+
+            i.item_name,
+
+            owner.full_name AS owner_name,
+            owner.email AS owner_email
+
+        FROM borrow_requests br
+
+        INNER JOIN items i
+            ON br.item_id = i.item_id
+
+        INNER JOIN users owner
+            ON br.owner_id = owner.user_id
+
+        WHERE br.request_id = ?
+          AND br.borrower_id = ?
+          AND br.status = 'Item Received'
+
+        LIMIT 1
+    ");
+
+
+    if ($stmt) {
+
+        $stmt->bind_param(
+            "ii",
+            $request_id,
+            $user_id
+        );
+
+        $stmt->execute();
+
+        $result =
+            $stmt->get_result();
+
+        $request =
+            $result->fetch_assoc();
+
+        $stmt->close();
+
+
+        if ($request) {
+
+            /*
+             * Item Received
+             *       ↓
+             * Return Requested
+             */
+
+            $update = $conn->prepare("
+                UPDATE borrow_requests
+
+                SET status = 'Return Requested'
+
+                WHERE request_id = ?
+                  AND borrower_id = ?
+                  AND status = 'Item Received'
+            ");
+
+
+            if ($update) {
+
+                $update->bind_param(
+                    "ii",
+                    $request_id,
+                    $user_id
+                );
+
+
+                if (
+                    $update->execute()
+                    && $update->affected_rows > 0
+                ) {
+
+                    /*
+                     * Notify owner by email.
+                     */
+
+                    sendReturnRequestEmail(
+                        $request['owner_email'],
+                        $request['owner_name'],
+                        $user_name,
+                        $request['item_name']
+                    );
+
+
+                    $message =
+                        "Return request sent to the owner.";
+
+                    $message_type = "success";
+
+                } else {
+
+                    $message =
+                        "Unable to send return request.";
+
+                    $message_type = "error";
+
+                }
+
+
+                $update->close();
+
+            }
+
+        } else {
+
+            $message =
+                "You can request a return only after receiving the item.";
+
+            $message_type = "error";
+
+        }
+
+    }
+
+}
+
+
+/* =========================================================
+   GET CURRENT BORROW REQUESTS
+========================================================= */
+
+$stmt = $conn->prepare("
+    SELECT
+
+        br.*,
+
+        i.item_name,
+        i.description,
+        i.item_condition,
+        i.availability,
+        i.location,
+        i.image,
+
+        owner.full_name AS owner_name,
+        owner.email AS owner_email
+
+    FROM borrow_requests br
+
+    INNER JOIN items i
+        ON br.item_id = i.item_id
+
+    INNER JOIN users owner
+        ON br.owner_id = owner.user_id
+
+    WHERE br.borrower_id = ?
+
+      AND br.request_id = (
+
+        SELECT br2.request_id
+
+        FROM borrow_requests br2
+
+        WHERE br2.item_id = br.item_id
+          AND br2.borrower_id = br.borrower_id
+
+        ORDER BY
+
+            CASE br2.status
+
+                WHEN 'Return Requested' THEN 1
+                WHEN 'Item Received' THEN 2
+                WHEN 'Approved' THEN 3
+                WHEN 'Pending' THEN 4
+                WHEN 'Rejected' THEN 5
+                WHEN 'Returned' THEN 6
+
+                ELSE 7
+
+            END,
+
+            br2.request_date DESC,
+            br2.request_id DESC
+
+        LIMIT 1
+
+      )
+
+    ORDER BY br.request_date DESC
 ");
+
+
+$stmt->bind_param(
+    "i",
+    $user_id
+);
+
+$stmt->execute();
+
+$result =
+    $stmt->get_result();
+
 ?>
 
 <!DOCTYPE html>
 
-<html>
+<html lang="en">
 
 <head>
 
-<meta charset="UTF-8">
+    <meta charset="UTF-8">
 
-<meta name="viewport"
-content="width=device-width, initial-scale=1.0">
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
 
-<title>My Borrow Requests</title>
+    <title>My Borrow Requests | CampusShare</title>
 
-<link rel="stylesheet"
-href="css/my_borrow_requests.css">
-
-<link rel="stylesheet"
-href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-
-
-<!-- =====================================================
-     RETURN REQUEST STYLES
-===================================================== -->
-
-<style>
-
-.return-requested {
-    color: #b45309;
-    font-weight: bold;
-}
-
-.return-btn {
-    background: #2563eb;
-    color: white;
-    border: none;
-    padding: 10px 18px;
-    border-radius: 7px;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: bold;
-    margin-top: 8px;
-}
-
-.return-btn:hover {
-    background: #1d4ed8;
-}
-
-.return-pending {
-    margin-top: 10px;
-    padding: 10px 14px;
-    background: #fef3c7;
-    border-radius: 7px;
-    color: #92400e;
-    font-weight: bold;
-}
-
-.returned-message {
-    margin-top: 10px;
-    padding: 10px 14px;
-    background: #dbeafe;
-    border-radius: 7px;
-    color: #1d4ed8;
-    font-weight: bold;
-}
-
-</style>
+    <link
+        rel="stylesheet"
+        href="css/my_borrow_requests.css?v=30"
+    >
 
 </head>
 
@@ -173,485 +511,931 @@ href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css"
      SIDEBAR
 ===================================================== -->
 
-<div class="sidebar">
+<aside class="sidebar">
 
-<div class="logo">
+    <div class="logo">
 
-<img src="images/logo.png">
+        <div class="logo-icon">
+            CS
+        </div>
 
-<h2>CampusShare</h2>
+        <div class="logo-title">
+            CampusShare
+        </div>
 
-</div>
+        <div class="logo-subtitle">
+            Community Sharing
+        </div>
 
-
-<ul>
-
-<li>
-
-<a href="dashboard.php">
-
-<i class="fa fa-house"></i>
-
-Dashboard
-
-</a>
-
-</li>
+    </div>
 
 
-<li>
-
-<a href="browse_items.php">
-
-<i class="fa fa-box"></i>
-
-Browse Items
-
-</a>
-
-</li>
+    <div class="menu-title">
+        MAIN MENU
+    </div>
 
 
-<li class="active">
-
-<a href="my_borrow_requests.php">
-
-<i class="fa fa-handshake"></i>
-
-My Borrow Requests
-
-</a>
-
-</li>
+    <a href="dashboard.php">
+        <span>🏠</span>
+        Dashboard
+    </a>
 
 
-<li>
+    <a href="add_item.php">
+        <span>➕</span>
+        Add Item
+    </a>
 
-<a href="logout.php">
 
-<i class="fa fa-right-from-bracket"></i>
+    <a href="my_items.php">
+        <span>📦</span>
+        My Items
+    </a>
 
-Logout
 
-</a>
+    <a href="browse_items.php">
+        <span>🔍</span>
+        Browse Items
+    </a>
 
-</li>
 
-</ul>
+    <a
+        href="my_borrow_requests.php"
+        class="active"
+    >
+        <span>📋</span>
+        My Borrow Requests
+    </a>
 
-</div>
+
+    <a href="manage_requests.php">
+        <span>📝</span>
+        Manage Requests
+    </a>
+
+
+    <div class="menu-title">
+        ACCOUNT
+    </div>
+
+
+    <a href="notifications.php">
+        <span>🔔</span>
+        Notifications
+    </a>
+
+
+    <a href="profile.php">
+        <span>👤</span>
+        Profile
+    </a>
+
+
+    <a href="feedback.php">
+        <span>⭐</span>
+        Feedback
+    </a>
+
+
+    <a href="contact.php">
+        <span>✉️</span>
+        Contact Admin
+    </a>
+
+
+    <a href="logout.php">
+        <span>🚪</span>
+        Logout
+    </a>
+
+</aside>
+
 
 
 <!-- =====================================================
      MAIN
 ===================================================== -->
 
-<div class="main">
+<main class="main">
 
 
-<header>
+    <!-- HEADER -->
 
-<h1>My Borrow Requests</h1>
+    <div class="page-header">
 
+        <div>
 
-<div class="profile">
+            <h1>
+                My Borrow Requests
+            </h1>
 
-<img src="images/default.png">
+            <p>
+                Track your requests, received items and returns.
+            </p>
 
-<span>
+        </div>
 
-<?php echo htmlspecialchars($user['full_name']); ?>
 
-</span>
+        <a
+            href="browse_items.php"
+            class="browse-btn"
+        >
+            🔍 Browse Items
+        </a>
 
-</div>
+    </div>
 
-</header>
 
 
-<!-- =====================================================
-     REQUEST CONTAINER
-===================================================== -->
+    <!-- MESSAGE -->
 
-<div class="request-container">
+    <?php if (!empty($message)): ?>
 
+        <div
+            class="message
+            <?php echo htmlspecialchars($message_type); ?>"
+        >
 
-<?php
+            <?php
 
-if(mysqli_num_rows($request_query) > 0)
-{
+            echo nl2br(
+                htmlspecialchars($message)
+            );
 
-while($request = mysqli_fetch_assoc($request_query))
-{
+            ?>
 
-?>
+        </div>
 
+    <?php endif; ?>
 
-<!-- =====================================================
-     REQUEST CARD
-===================================================== -->
 
-<div class="request-card">
 
+    <!-- REQUESTS -->
 
-<!-- =====================================================
-     ITEM IMAGE
-===================================================== -->
+    <section class="request-section">
 
-<div class="request-image">
 
+        <?php if ($result->num_rows > 0): ?>
 
-<?php
 
-if(!empty($request['image']) &&
-   file_exists("uploads/items/".$request['image']))
-{
+            <?php while ($row = $result->fetch_assoc()): ?>
 
-?>
 
-<img
-src="uploads/items/<?php echo htmlspecialchars($request['image']); ?>"
-alt="Item Image">
+                <?php
 
-<?php
+                /*
+                 * Image
+                 */
 
-}
+                $imageFile =
+                    basename(
+                        $row['image'] ?? ''
+                    );
 
-else
 
-{
+                $imagePath = "";
 
-?>
 
-<img
-src="images/default.png"
-alt="No Image">
+                if (
+                    !empty($imageFile)
+                    && file_exists(
+                        __DIR__
+                        . "/uploads/items/"
+                        . $imageFile
+                    )
+                ) {
 
-<?php
+                    $imagePath =
+                        "uploads/items/"
+                        . rawurlencode($imageFile);
 
-}
+                }
 
-?>
 
-</div>
+                /*
+                 * Status class
+                 */
 
+                $statusClass = "pending";
 
-<!-- =====================================================
-     REQUEST DETAILS
-===================================================== -->
 
-<div class="request-details">
+                if (
+                    $row['status']
+                    === 'Approved'
+                ) {
 
+                    $statusClass = "approved";
 
-<h2>
+                }
 
-<?php
+                elseif (
+                    $row['status']
+                    === 'Item Received'
+                ) {
 
-echo htmlspecialchars(
-    $request['item_name']
-);
+                    $statusClass = "received";
 
-?>
+                }
 
-</h2>
+                elseif (
+                    $row['status']
+                    === 'Return Requested'
+                ) {
 
+                    $statusClass =
+                        "return-requested";
 
-<!-- OWNER -->
+                }
 
-<p>
+                elseif (
+                    $row['status']
+                    === 'Rejected'
+                ) {
 
-<strong>Owner :</strong>
+                    $statusClass = "rejected";
 
-<?php
+                }
 
-echo htmlspecialchars(
-    $request['full_name']
-);
+                elseif (
+                    $row['status']
+                    === 'Returned'
+                ) {
 
-?>
+                    $statusClass = "returned";
 
-</p>
+                }
 
+                ?>
 
-<!-- BORROW DATE -->
 
-<p>
+                <!-- REQUEST CARD -->
 
-<strong>Borrow Date :</strong>
+                <article class="request-card">
 
-<?php
 
-echo htmlspecialchars(
-    $request['borrow_date'] ?? ''
-);
+                    <!-- IMAGE -->
 
-?>
+                    <div class="item-image">
 
-</p>
 
+                        <?php if (!empty($imagePath)): ?>
 
-<!-- EXPECTED RETURN DATE -->
+                            <img
+                                src="<?php
+                                echo htmlspecialchars(
+                                    $imagePath
+                                );
+                                ?>"
+                                alt="<?php
+                                echo htmlspecialchars(
+                                    $row['item_name']
+                                );
+                                ?>"
+                            >
 
-<p>
+                        <?php else: ?>
 
-<strong>Expected Return :</strong>
+                            <div class="no-image">
+                                📦
+                            </div>
 
-<?php
+                        <?php endif; ?>
 
-echo htmlspecialchars(
-    $request['expected_return_date'] ?? ''
-);
 
-?>
+                    </div>
 
-</p>
 
 
-<!-- =====================================================
-     STATUS
-===================================================== -->
+                    <!-- CONTENT -->
 
-<p>
+                    <div class="request-content">
 
-<strong>Status :</strong>
 
+                        <div class="request-heading">
 
-<?php
 
-$status = $request['status'];
+                            <div>
 
+                                <div class="request-number">
+                                    Request #
+                                    <?php
+                                    echo (int)
+                                        $row['request_id'];
+                                    ?>
+                                </div>
 
-if($status=="Pending")
-{
 
-?>
+                                <h2>
 
-<span class="pending">
-Pending
-</span>
+                                    <?php
+                                    echo htmlspecialchars(
+                                        $row['item_name']
+                                    );
+                                    ?>
 
-<?php
+                                </h2>
 
-}
+                            </div>
 
 
-elseif($status=="Approved")
-{
+                            <span
+                                class="status
+                                <?php
+                                echo $statusClass;
+                                ?>"
+                            >
 
-?>
+                                <?php
+                                echo htmlspecialchars(
+                                    $row['status']
+                                );
+                                ?>
 
-<span class="approved">
-Approved
-</span>
+                            </span>
 
-<?php
 
-}
+                        </div>
 
 
-elseif($status=="Rejected")
-{
 
-?>
+                        <!-- DETAILS -->
 
-<span class="rejected">
-Rejected
-</span>
+                        <div class="details-grid">
 
-<?php
 
-}
+                            <div class="detail">
 
+                                <span class="detail-label">
+                                    Owner
+                                </span>
 
-elseif($status=="Return Requested")
-{
+                                <span class="detail-value">
 
-?>
+                                    <?php
+                                    echo htmlspecialchars(
+                                        $row['owner_name']
+                                    );
+                                    ?>
 
-<span class="return-requested">
-Return Requested
-</span>
+                                </span>
 
-<?php
+                            </div>
 
-}
 
+                            <div class="detail">
 
-elseif($status=="Returned")
-{
+                                <span class="detail-label">
+                                    Location
+                                </span>
 
-?>
+                                <span class="detail-value">
 
-<span class="returned">
-Returned
-</span>
+                                    <?php
+                                    echo htmlspecialchars(
+                                        $row['location']
+                                        ?? 'Not specified'
+                                    );
+                                    ?>
 
-<?php
+                                </span>
 
-}
+                            </div>
 
-?>
 
-</p>
+                            <div class="detail">
 
+                                <span class="detail-label">
+                                    Condition
+                                </span>
 
-<!-- =====================================================
-     RETURN ITEM OPTION
-===================================================== -->
+                                <span class="detail-value">
 
-<?php
+                                    <?php
+                                    echo htmlspecialchars(
+                                        $row['item_condition']
+                                        ?? 'Not specified'
+                                    );
+                                    ?>
 
-/*
-|--------------------------------------------------------------------------
-| APPROVED
-|--------------------------------------------------------------------------
-|
-| Borrower can request a return only when the
-| borrowing request has been approved.
-|
-*/
+                                </span>
 
-if($status=="Approved")
-{
+                            </div>
 
-?>
 
-<form method="POST"
-      onsubmit="return confirm('Are you sure you want to send a return request for this item?');">
+                            <div class="detail">
 
-<input
-type="hidden"
-name="request_id"
-value="<?php echo (int)$request['request_id']; ?>"
->
+                                <span class="detail-label">
+                                    Borrow Date
+                                </span>
 
+                                <span class="detail-value">
 
-<button
-type="submit"
-name="return_item"
-class="return-btn"
->
+                                    <?php
 
-<i class="fa fa-rotate-left"></i>
+                                    echo !empty(
+                                        $row['borrow_date']
+                                    )
 
-Return Item
+                                        ? date(
+                                            "d-m-Y",
+                                            strtotime(
+                                                $row['borrow_date']
+                                            )
+                                        )
 
-</button>
+                                        : "Not specified";
 
-</form>
+                                    ?>
 
+                                </span>
 
-<?php
+                            </div>
 
-}
 
+                            <div class="detail">
 
-/*
-|--------------------------------------------------------------------------
-| RETURN REQUESTED
-|--------------------------------------------------------------------------
-|
-| Borrower has already requested the return.
-| Wait for the owner to accept or reject it.
-|
-*/
+                                <span class="detail-label">
+                                    Expected Return
+                                </span>
 
-elseif($status=="Return Requested")
-{
+                                <span class="detail-value">
 
-?>
+                                    <?php
 
-<div class="return-pending">
+                                    echo !empty(
+                                        $row[
+                                            'expected_return_date'
+                                        ]
+                                    )
 
-<i class="fa fa-clock"></i>
+                                        ? date(
+                                            "d-m-Y",
+                                            strtotime(
+                                                $row[
+                                                    'expected_return_date'
+                                                ]
+                                            )
+                                        )
 
-Return request sent. Waiting for owner approval.
+                                        : "Not specified";
 
-</div>
+                                    ?>
 
+                                </span>
 
-<?php
+                            </div>
 
-}
 
+                            <div class="detail">
 
-/*
-|--------------------------------------------------------------------------
-| RETURNED
-|--------------------------------------------------------------------------
-|
-| Owner accepted the return request.
-|
-*/
+                                <span class="detail-label">
+                                    Request Date
+                                </span>
 
-elseif($status=="Returned")
-{
+                                <span class="detail-value">
 
-?>
+                                    <?php
 
-<div class="returned-message">
+                                    echo !empty(
+                                        $row['request_date']
+                                    )
 
-<i class="fa fa-check-circle"></i>
+                                        ? date(
+                                            "d-m-Y h:i A",
+                                            strtotime(
+                                                $row['request_date']
+                                            )
+                                        )
 
-Item returned successfully.
+                                        : "Not specified";
 
-</div>
+                                    ?>
 
+                                </span>
 
-<?php
+                            </div>
 
-}
 
-?>
+                        </div>
 
 
-</div>
 
+                        <!-- =================================================
+                             PENDING
+                        ================================================== -->
 
-</div>
+                        <?php if (
+                            $row['status']
+                            === 'Pending'
+                        ): ?>
 
 
-<?php
+                            <div class="action-box pending-box">
 
-}
+                                <div class="action-icon">
+                                    ⏳
+                                </div>
 
-}
 
-else
+                                <div class="action-text">
 
-{
+                                    <h3>
+                                        Request Pending
+                                    </h3>
 
-?>
+                                    <p>
+                                        Your request has been sent to
+                                        the owner. Please wait for the
+                                        owner to accept or reject it.
+                                    </p>
 
 
-<!-- =====================================================
-     NO REQUESTS
-===================================================== -->
+                                    <form
+                                        method="POST"
+                                        class="inline-form"
+                                    >
 
-<div class="no-request">
+                                        <input
+                                            type="hidden"
+                                            name="request_id"
+                                            value="<?php
+                                            echo (int)
+                                                $row['request_id'];
+                                            ?>"
+                                        >
 
-<h2>
-No Borrow Requests
-</h2>
 
-<p>
-You have not requested any items yet.
-</p>
+                                        <button
+                                            type="submit"
+                                            name="cancel_request"
+                                            class="btn cancel-btn"
+                                            onclick="
+                                                return confirm(
+                                                    'Are you sure you want to cancel this request?'
+                                                );
+                                            "
+                                        >
+                                            ✕ Cancel Request
+                                        </button>
 
-</div>
+                                    </form>
 
+                                </div>
 
-<?php
+                            </div>
 
-}
 
-?>
 
+                        <!-- =================================================
+                             APPROVED
+                        ================================================== -->
 
-</div>
+                        <?php elseif (
+                            $row['status']
+                            === 'Approved'
+                        ): ?>
 
 
-</div>
+                            <div class="action-box approved-box">
+
+                                <div class="action-icon">
+                                    ✓
+                                </div>
+
+
+                                <div class="action-text">
+
+                                    <h3>
+                                        Request Accepted
+                                    </h3>
+
+                                    <p>
+                                        The owner has accepted your
+                                        borrow request.
+                                    </p>
+
+                                    <p>
+                                        After you physically receive
+                                        the item, click
+                                        <strong>
+                                            Item Received
+                                        </strong>.
+                                    </p>
+
+
+                                    <form
+                                        method="POST"
+                                        class="inline-form"
+                                    >
+
+                                        <input
+                                            type="hidden"
+                                            name="request_id"
+                                            value="<?php
+                                            echo (int)
+                                                $row['request_id'];
+                                            ?>"
+                                        >
+
+
+                                        <button
+                                            type="submit"
+                                            name="received"
+                                            class="btn received-btn"
+                                            onclick="
+                                                return confirm(
+                                                    'Have you received this item from the owner?'
+                                                );
+                                            "
+                                        >
+                                            ✓ Item Received
+                                        </button>
+
+                                    </form>
+
+                                </div>
+
+                            </div>
+
+
+
+                        <!-- =================================================
+                             ITEM RECEIVED
+                        ================================================== -->
+
+                        <?php elseif (
+                            $row['status']
+                            === 'Item Received'
+                        ): ?>
+
+
+                            <div class="action-box received-box">
+
+                                <div class="action-icon">
+                                    📦
+                                </div>
+
+
+                                <div class="action-text">
+
+                                    <h3>
+                                        Item Received
+                                    </h3>
+
+                                    <p>
+                                        You have confirmed that you
+                                        received the item.
+                                    </p>
+
+                                    <p>
+                                        When you return the item to the
+                                        owner, click
+                                        <strong>
+                                            Return Item
+                                        </strong>.
+                                    </p>
+
+
+                                    <form
+                                        method="POST"
+                                        class="inline-form"
+                                    >
+
+                                        <input
+                                            type="hidden"
+                                            name="request_id"
+                                            value="<?php
+                                            echo (int)
+                                                $row['request_id'];
+                                            ?>"
+                                        >
+
+
+                                        <button
+                                            type="submit"
+                                            name="return_item"
+                                            class="btn return-btn"
+                                            onclick="
+                                                return confirm(
+                                                    'Do you want to send a return request to the owner?'
+                                                );
+                                            "
+                                        >
+                                            ↩ Return Item
+                                        </button>
+
+                                    </form>
+
+                                </div>
+
+                            </div>
+
+
+
+                        <!-- =================================================
+                             RETURN REQUESTED
+                        ================================================== -->
+
+                        <?php elseif (
+                            $row['status']
+                            === 'Return Requested'
+                        ): ?>
+
+
+                            <div class="action-box return-request-box">
+
+                                <div class="action-icon">
+                                    ↩
+                                </div>
+
+
+                                <div class="action-text">
+
+                                    <h3>
+                                        Return Request Sent
+                                    </h3>
+
+                                    <p>
+                                        Your return request has been
+                                        sent to the owner.
+                                    </p>
+
+                                    <p>
+                                        Please wait for the owner to
+                                        accept the return.
+                                    </p>
+
+
+                                    <div class="waiting-label">
+                                        ⏳ Waiting for Owner
+                                    </div>
+
+                                </div>
+
+                            </div>
+
+
+
+                        <!-- =================================================
+                             REJECTED
+                        ================================================== -->
+
+                        <?php elseif (
+                            $row['status']
+                            === 'Rejected'
+                        ): ?>
+
+
+                            <div class="action-box rejected-box">
+
+                                <div class="action-icon">
+                                    ✕
+                                </div>
+
+
+                                <div class="action-text">
+
+                                    <h3>
+                                        Request Rejected
+                                    </h3>
+
+
+                                    <p>
+                                        The owner rejected your
+                                        borrow request.
+                                    </p>
+
+
+                                    <?php if (
+                                        !empty(
+                                            $row['owner_message']
+                                        )
+                                    ): ?>
+
+                                        <div class="owner-message">
+
+                                            <strong>
+                                                Owner Message
+                                            </strong>
+
+                                            <p>
+                                                <?php
+                                                echo nl2br(
+                                                    htmlspecialchars(
+                                                        $row[
+                                                            'owner_message'
+                                                        ]
+                                                    )
+                                                );
+                                                ?>
+                                            </p>
+
+                                        </div>
+
+                                    <?php endif; ?>
+
+
+                                    <a
+                                        href="borrow_request.php?item_id=<?php
+                                        echo (int)
+                                            $row['item_id'];
+                                        ?>"
+                                        class="btn request-again-btn"
+                                    >
+                                        ↻ Request Again
+                                    </a>
+
+                                </div>
+
+                            </div>
+
+
+
+                        <!-- =================================================
+                             RETURNED
+                        ================================================== -->
+
+                        <?php elseif (
+                            $row['status']
+                            === 'Returned'
+                        ): ?>
+
+
+                            <div class="action-box returned-box">
+
+                                <div class="action-icon">
+                                    ✓
+                                </div>
+
+
+                                <div class="action-text">
+
+                                    <h3>
+                                        Item Returned
+                                    </h3>
+
+                                    <p>
+                                        The owner accepted the return.
+                                    </p>
+
+                                    <p>
+                                        The item has been returned
+                                        successfully and is available
+                                        again.
+                                    </p>
+
+                                </div>
+
+                            </div>
+
+
+                        <?php endif; ?>
+
+
+                    </div>
+
+
+                </article>
+
+
+            <?php endwhile; ?>
+
+
+        <?php else: ?>
+
+
+            <div class="empty-state">
+
+                <div class="empty-icon">
+                    📋
+                </div>
+
+                <h2>
+                    No Borrow Requests
+                </h2>
+
+                <p>
+                    You have not sent any borrow requests yet.
+                </p>
+
+
+                <a
+                    href="browse_items.php"
+                    class="btn browse-empty-btn"
+                >
+                    🔍 Browse Items
+                </a>
+
+            </div>
+
+
+        <?php endif; ?>
+
+
+    </section>
+
+
+</main>
 
 
 </body>

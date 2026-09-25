@@ -2,174 +2,349 @@
 // CampusShare Register JavaScript
 // ==========================================
 
-// Show/Hide Password Feature
+
+// ==========================================
+// Get Elements
+// ==========================================
+
+const form = document.getElementById("registerForm");
 
 const password = document.getElementById("password");
-const confirmPassword = document.getElementById("confirmPassword");
 
-const passwordContainer = password.parentElement;
-const confirmContainer = confirmPassword.parentElement;
+const confirmPassword =
+    document.getElementById("confirmPassword");
 
-const eye1 = document.createElement("i");
-eye1.className = "fa-solid fa-eye";
-eye1.style.cursor = "pointer";
-eye1.style.marginLeft = "10px";
+const imageInput =
+    document.getElementById("profile_image");
 
-const eye2 = document.createElement("i");
-eye2.className = "fa-solid fa-eye";
-eye2.style.cursor = "pointer";
-eye2.style.marginLeft = "10px";
 
-passwordContainer.appendChild(eye1);
-confirmContainer.appendChild(eye2);
+// ==========================================
+// Password Show / Hide
+// ==========================================
 
-// Toggle Password
+function createPasswordToggle(input) {
 
-eye1.addEventListener("click", function(){
+    const container = input.parentElement;
 
-    if(password.type === "password"){
+    const icon = document.createElement("i");
 
-        password.type = "text";
-        eye1.classList.replace("fa-eye","fa-eye-slash");
+    icon.className = "fa-solid fa-eye";
 
-    }else{
+    icon.style.cursor = "pointer";
 
-        password.type = "password";
-        eye1.classList.replace("fa-eye-slash","fa-eye");
+    icon.style.marginLeft = "10px";
 
-    }
+    icon.title = "Show password";
 
-});
+    container.appendChild(icon);
 
-// Toggle Confirm Password
 
-eye2.addEventListener("click", function(){
+    icon.addEventListener("click", function () {
 
-    if(confirmPassword.type === "password"){
+        if (input.type === "password") {
 
-        confirmPassword.type = "text";
-        eye2.classList.replace("fa-eye","fa-eye-slash");
+            input.type = "text";
 
-    }else{
+            icon.classList.remove("fa-eye");
 
-        confirmPassword.type = "password";
-        eye2.classList.replace("fa-eye-slash","fa-eye");
+            icon.classList.add("fa-eye-slash");
 
-    }
+            icon.title = "Hide password";
 
-});
+        } else {
 
-// ==========================
-// Form Validation
-// ==========================
+            input.type = "password";
 
-const form = document.querySelector("form");
+            icon.classList.remove("fa-eye-slash");
 
-form.addEventListener("submit",function(e){
+            icon.classList.add("fa-eye");
 
-    const name = document.querySelector("input[name='full_name']").value.trim();
+            icon.title = "Show password";
 
-    const email = document.querySelector("input[name='email']").value.trim();
-
-    const phone = document.querySelector("input[name='phone']").value.trim();
-
-    const pass = password.value;
-
-    const confirm = confirmPassword.value;
-
-    const emailPattern = /^[^ ]+@[^ ]+\.[a-z]{2,3}$/;
-
-    const phonePattern = /^[0-9]{10}$/;
-
-    if(name.length < 3){
-
-        alert("Full name must contain at least 3 characters.");
-        e.preventDefault();
-        return;
-
-    }
-
-    if(!email.match(emailPattern)){
-
-        alert("Enter a valid email address.");
-        e.preventDefault();
-        return;
-
-    }
-
-    if(!phone.match(phonePattern)){
-
-        alert("Phone number must contain exactly 10 digits.");
-        e.preventDefault();
-        return;
-
-    }
-
-    if(pass.length < 6){
-
-        alert("Password must be at least 6 characters.");
-        e.preventDefault();
-        return;
-
-    }
-
-    if(pass !== confirm){
-
-        alert("Passwords do not match.");
-        e.preventDefault();
-        return;
-
-    }
-
-});
-
-// ==========================
-// Profile Image Preview
-// ==========================
-
-const imageInput = document.querySelector("input[name='profile_image']");
-
-const preview = document.createElement("img");
-
-preview.style.width = "120px";
-preview.style.height = "120px";
-preview.style.borderRadius = "50%";
-preview.style.marginTop = "15px";
-preview.style.display = "none";
-preview.style.objectFit = "cover";
-
-imageInput.parentNode.appendChild(preview);
-
-imageInput.addEventListener("change",function(){
-
-    const file = this.files[0];
-
-    if(file){
-
-        preview.src = URL.createObjectURL(file);
-
-        preview.style.display = "block";
-
-    }
-
-});
-
-// ==========================
-// Input Animation
-// ==========================
-
-const inputs = document.querySelectorAll("input, select");
-
-inputs.forEach(input=>{
-
-    input.addEventListener("focus",function(){
-
-        this.style.transform = "scale(1.02)";
-        this.style.transition = ".3s";
+        }
 
     });
 
-    input.addEventListener("blur",function(){
+}
+
+
+createPasswordToggle(password);
+
+createPasswordToggle(confirmPassword);
+
+
+// ==========================================
+// Profile Image Preview
+// ==========================================
+
+const preview = document.createElement("img");
+
+preview.className = "profile-preview";
+
+preview.alt = "Profile Preview";
+
+imageInput.parentNode.appendChild(preview);
+
+
+imageInput.addEventListener("change", function () {
+
+    const file = this.files[0];
+
+    if (!file) {
+
+        preview.style.display = "none";
+
+        preview.src = "";
+
+        return;
+
+    }
+
+
+    // Check file size
+
+    const maxSize = 2 * 1024 * 1024;
+
+    if (file.size > maxSize) {
+
+        alert("Profile image must be less than 2 MB.");
+
+        this.value = "";
+
+        preview.style.display = "none";
+
+        return;
+
+    }
+
+
+    // Check image type
+
+    const allowedTypes = [
+        "image/jpeg",
+        "image/png"
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+
+        alert("Only JPG, JPEG and PNG images are allowed.");
+
+        this.value = "";
+
+        preview.style.display = "none";
+
+        return;
+
+    }
+
+
+    // Display preview
+
+    const imageURL = URL.createObjectURL(file);
+
+    preview.src = imageURL;
+
+    preview.style.display = "block";
+
+});
+
+
+// ==========================================
+// Form Validation
+// ==========================================
+
+form.addEventListener("submit", function (event) {
+
+    const name =
+        document.getElementById("full_name").value.trim();
+
+    const email =
+        document.getElementById("email").value.trim();
+
+    const phone =
+        document.getElementById("phone").value.trim();
+
+    const department =
+        document.getElementById("department").value;
+
+    const year =
+        document.getElementById("year").value;
+
+    const pass =
+        password.value;
+
+    const confirm =
+        confirmPassword.value;
+
+
+    // Name validation
+
+    if (name.length < 3) {
+
+        alert(
+            "Full name must contain at least 3 characters."
+        );
+
+        event.preventDefault();
+
+        return;
+
+    }
+
+
+    // Email validation
+
+    const emailPattern =
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailPattern.test(email)) {
+
+        alert(
+            "Please enter a valid email address."
+        );
+
+        event.preventDefault();
+
+        return;
+
+    }
+
+
+    // Phone validation
+
+    const phonePattern =
+        /^[0-9]{10}$/;
+
+    if (!phonePattern.test(phone)) {
+
+        alert(
+            "Phone number must contain exactly 10 digits."
+        );
+
+        event.preventDefault();
+
+        return;
+
+    }
+
+
+    // Department
+
+    if (department === "") {
+
+        alert("Please select your department.");
+
+        event.preventDefault();
+
+        return;
+
+    }
+
+
+    // Year
+
+    if (year === "") {
+
+        alert("Please select your year of study.");
+
+        event.preventDefault();
+
+        return;
+
+    }
+
+
+    // Password
+
+    if (pass.length < 6) {
+
+        alert(
+            "Password must be at least 6 characters."
+        );
+
+        event.preventDefault();
+
+        return;
+
+    }
+
+
+    // Confirm password
+
+    if (pass !== confirm) {
+
+        alert("Passwords do not match.");
+
+        event.preventDefault();
+
+        return;
+
+    }
+
+
+    // Show submitting message
+
+    const button =
+        document.getElementById("registerButton");
+
+    button.disabled = true;
+
+    button.innerHTML =
+        '<i class="fa-solid fa-spinner fa-spin"></i> Registering...';
+
+});
+
+
+// ==========================================
+// Password Match Indicator
+// ==========================================
+
+confirmPassword.addEventListener("input", function () {
+
+    if (this.value === "") {
+
+        this.style.borderColor = "";
+
+        return;
+
+    }
+
+
+    if (password.value === this.value) {
+
+        this.style.borderColor = "green";
+
+    } else {
+
+        this.style.borderColor = "red";
+
+    }
+
+});
+
+
+// ==========================================
+// Input Animation
+// ==========================================
+
+const inputs =
+    document.querySelectorAll(
+        "input:not([type='checkbox']):not([type='file']), select"
+    );
+
+
+inputs.forEach(function (input) {
+
+    input.addEventListener("focus", function () {
+
+        this.style.transform = "scale(1.01)";
+
+        this.style.transition = "0.2s";
+
+    });
+
+
+    input.addEventListener("blur", function () {
 
         this.style.transform = "scale(1)";
 
@@ -177,27 +352,37 @@ inputs.forEach(input=>{
 
 });
 
-// ==========================
+
+// ==========================================
 // Welcome Animation
-// ==========================
+// ==========================================
 
-window.onload=function(){
+window.addEventListener("load", function () {
 
-    const formBox = document.querySelector(".form-box");
+    const formBox =
+        document.querySelector(".form-box");
 
-    formBox.style.opacity="0";
-    formBox.style.transform="translateY(40px)";
+    formBox.style.opacity = "0";
 
-    setTimeout(function(){
+    formBox.style.transform =
+        "translateY(30px)";
 
-        formBox.style.transition=".8s";
 
-        formBox.style.opacity="1";
+    setTimeout(function () {
 
-        formBox.style.transform="translateY(0)";
+        formBox.style.transition =
+            "0.8s ease";
 
-    },200);
+        formBox.style.opacity = "1";
 
-};
+        formBox.style.transform =
+            "translateY(0)";
 
-console.log("CampusShare Register Loaded Successfully");
+    }, 150);
+
+});
+
+
+console.log(
+    "CampusShare Register Loaded Successfully"
+);

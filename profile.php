@@ -168,7 +168,7 @@ else
 {
 ?>
 
-<img src="images/default.png" alt="Default Image">
+<img src="images/default.jpg" alt="Default Image">
 
 <?php
 }
